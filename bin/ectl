@@ -93,7 +93,7 @@ if len(sys.argv) == 1:
     sys.exit(1)
 
 # actually parse the args.
-args = parser.parse_args()
+args,unknown_args = parser.parse_known_args()
 
 def main():
     # Set up environment based on args.
@@ -104,7 +104,7 @@ def main():
     # Try to load the particular command asked for and run it
     command = ectl.cmd.get_command(args.command)
     try:
-        return_val = command(parser, args)
+        return_val = command(parser, args, unknown_args)
     except KeyboardInterrupt:
         sys.stderr.write('\n')
         tty.die("Keyboard interrupt.")

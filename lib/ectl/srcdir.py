@@ -1,5 +1,4 @@
 import os
-import pathspec
 import re
 from ectl import xhash
 
@@ -12,21 +11,6 @@ def list_src_files(src_dir):
             for file in files:
                 if badRE.match(file) is None:
                     yield os.path.join(root, file)
-
-
-#def list_src_files(src_dir):
-#    """Lists the source files (to be hashed) in a ModelE source directory"""
-#    with open(os.path.join(src_dir, '.gitignore')) as fin:
-#        spec_txt = fin.read()
-#    git_ignores = spec_txt.splitlines() + ['.git/', '.*', 'doc/', 'aux/', 'init_cond/', 'tests/', 'pyext/', 'pylib/']
-#
-#    bad_spec = pathspec.PathSpec.from_lines(pathspec.GitIgnorePattern, git_ignores)
-#    bad_matches = set(bad_spec.match_tree(src_dir))
-#    all_spec = pathspec.PathSpec.from_lines(pathspec.GitIgnorePattern, ['model/', 'cmake/', 'CMakeLists.txt'])
-#    all_matches = all_spec.match_tree(src_dir)
-#    for file in all_matches:
-#        if file not in bad_matches:
-#            yield file
 
 
 def update_hash(src_dir, hash):

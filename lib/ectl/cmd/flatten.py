@@ -17,7 +17,10 @@ def setup_parser(subparser):
     subparser.add_argument(
         'out_rundeck', nargs=1, help='Output rundeck')
 
-def flatten(parser, args):
+def flatten(parser, args, unknown_args):
+    if len(unkown_args) > 0:
+        raise ValueError('Unkown arguments: %s' % unknown_args)
+
     in_rundeck = args.in_rundeck[0]
     out_rundeck = args.out_rundeck[0]
 

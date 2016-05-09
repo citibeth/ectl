@@ -7,6 +7,10 @@ import ectl
 import ectl.cmd
 from ectl import pathutil,rundeck,rundir,xhash,srcdir
 import subprocess
+import base64
+import re
+from ectl import iso8601
+import datetime
 
 description = 'Setup a ModelE run.'
 
@@ -15,9 +19,17 @@ def setup_parser(subparser):
 #        'rundeck', nargs=1, help='Rundeck file use in setup.')
     subparser.add_argument(
         'rundir', help='Directory of run to setup (inside ectl)')
-    subparser.add_argument('--rundeck', action='store', dest='rundeck',
+    subparser.add_argument('--rundeck', '-rd', action='store', dest='rundeck',
         help='Rundeck to use in setup')
-    
+    subparser.add_argument('--timespan', '-ts', action='store', dest='timespan',
+        help='[iso8601],[iso8601],[iso8601] (start, cold-end, end) Timespan to run it for', default='')
+
+
+
+def parse_date(str):
+    if len(str) == 0:
+        return None
+    return iso8601.parse_date(str)
 
 def follow_link(linkname, must_exist=False):
     if not os.path.exists(linkname):
@@ -32,12 +44,14 @@ def buildhash(rd, src_dir):
     xhash.update(rd, hash)
     xhash.update(src_dir, hash)    # Source directory
     return hash.hexdigest()
+#    return base64.b32encode(hash.digest()).lower()
 
 def pkghash(rd, src_dir):
     hash = hashlib.md5()
     xhash.update(rd, hash)
     srcdir.update_hash(src_dir, hash)
     return hash.hexdigest()
+#    return base64.b32encode(hash.digest()).lower()
 
 def good_pkg_dir(pkg_dir):
     """Determines that a pkg_dir has all binaries needed to run."""
@@ -57,8 +71,29 @@ def set_link(src, dst):
         os.remove(dst)
     os.symlink(src, dst)
 
-def setup(parser, args):
-    run_dir = os.path.join(ectl.root, 'runs', args.rundir)
+def setup(parser, args, unknown_args):
+    if len(unknown_args) > 0:
+        raise ValueError('Unkown arguments: %s' % unknown_args)
+
+    run_dir = pathutil.search_file(args.rundir, [os.path.join(ectl.root, 'runs')])
+
+    start_ts = None
+    cold_end_ts = None
+    end_ts = None
+    if hasattr(args, 'timespan'):
+        tss = [parse_date(sdate.strip()) for sdate in args.timespan.split(',')]
+        if len(tss) == 1:
+            start_ts = tss[0]
+        elif len(tss) == 2:
+            start_ts = tss[0]
+            cold_end_ts = tss[1]
+            end_ts = tss[1]
+        elif len(tss) == 3:
+            start_ts = tss[0]
+            cold_end_ts = tss[1]
+            end_ts = tss[2]
+        else:
+            raise ValueError('Invalid timespan %s' % args.timespan)
 
     # ---------------
 
@@ -140,6 +175,13 @@ def setup(parser, args):
         download_dir=rundeck.default_file_path[0])
 
     # ---- Create data file symlinks and I file
+    print('sss', start_ts, end_ts)
+    if start_ts is not None:
+        rd.set(('INPUTZ', 'START_TIME'), datetime.datetime(*start_ts))
+    if cold_end_ts is not None:
+        rd.set(('INPUTZ_cold', 'END_TIME'), datetime.datetime(*cold_end_ts))
+    if end_ts is not None:
+        rd.set(('INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
     rundir.make_rundir(rd, run_dir)
 
     # ---- Copy in original rundeck...

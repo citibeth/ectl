@@ -1,0 +1,131 @@
+#!/usr/bin/env python
+##############################################################################
+# Copyright (c) 2013, Lawrence Livermore National Security, LLC.
+# Produced at the Lawrence Livermore National Laboratory.
+#
+# This file is part of Spack.
+# Written by Todd Gamblin, tgamblin@llnl.gov, All rights reserved.
+# LLNL-CODE-647188
+#
+# For details, see https://github.com/llnl/spack
+# Please also see the LICENSE file for our notice and the LGPL.
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License (as published by
+# the Free Software Foundation) version 2.1 dated February 1999.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the terms and
+# conditions of the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public License
+# along with this program; if not, write to the Free Software Foundation,
+# Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+##############################################################################
+import sys
+if not sys.version_info[:2] >= (2,7):
+    v_info = sys.version_info[:3]
+    sys.exit("Ectl requires Python 2.7 or higher.  This is Python %d.%d.%d." % v_info)
+
+import os
+
+# Find ectl's location and its prefix.
+ECTL_FILE = os.path.realpath(os.path.expanduser(__file__))
+#os.environ["ECTL_FILE"] = ECTL_FILE
+ECTL_PREFIX = os.path.dirname(os.path.dirname(ECTL_FILE))
+
+#ECTL_ROOT = os.abspath(os.path.split(ECTL_FILE)[0], '..')
+
+# Allow ectl libs to be imported in our scripts
+ECTL_LIB_PATH = os.path.join(ECTL_PREFIX, "lib")
+sys.path.insert(0, ECTL_LIB_PATH)
+
+#ECTL_EXTERNAL_LIBS = os.path.join(ECTL_LIB_PATH, "external")
+#sys.path.insert(0, ECTL_EXTERNAL_LIBS)
+
+import warnings
+## Avoid warnings when nose is installed with the python exe being used to run
+## ectl. Note this must be done after Ectl's external libs directory is added
+## to sys.path.
+#with warnings.catch_warnings():
+#    warnings.filterwarnings("ignore", ".*nose was already imported")
+#    import nose
+
+# If there is no working directory, use the ectl prefix.
+try:
+    working_dir = os.getcwd()
+except OSError:
+    os.chdir(ECTL_PREFIX)
+    working_dir = ECTL_PREFIX
+
+# clean up the scope and start using ectl package instead.
+del ECTL_FILE, ECTL_PREFIX, ECTL_LIB_PATH
+import llnl.util.tty as tty
+from llnl.util.tty.color import *
+import argparse
+
+# Command parsing
+parser = argparse.ArgumentParser(
+    formatter_class=argparse.RawTextHelpFormatter,
+    description="Ectl: Control ModelE.")
+
+parser.add_argument('-d', '--debug', action='store_true',
+                    help="Write out debug logs during compile")
+parser.add_argument('-v', '--verbose', action='store_true',
+                    help="Print additional output during builds")
+#parser.add_argument('-V', '--version', action='version',
+#                    version="%s" % ectl.ectl_version)
+
+# each command module implements a parser() function, to which we pass its
+# subparser for setup.
+subparsers = parser.add_subparsers(metavar='SUBCOMMAND', dest="command")
+
+import ectl.cmd
+for cmd in ectl.cmd.commands:
+    module = ectl.cmd.get_module(cmd)
+    subparser = subparsers.add_parser(cmd, help=module.description)
+    module.setup_parser(subparser)
+
+# Just print help and exit if run with no arguments at all
+if len(sys.argv) == 1:
+    parser.print_help()
+    sys.exit(1)
+
+# actually parse the args.
+args = parser.parse_args()
+
+def main():
+    # Set up environment based on args.
+    tty.set_verbose(args.verbose)
+    tty.set_debug(args.debug)
+    ectl.debug = args.debug
+
+    # Try to load the particular command asked for and run it
+    command = ectl.cmd.get_command(args.command)
+    try:
+        return_val = command(parser, args)
+    except KeyboardInterrupt:
+        sys.stderr.write('\n')
+        tty.die("Keyboard interrupt.")
+#    except Exception as e:
+#        tty.die(e)
+
+
+    # Allow commands to return values if they want to exit with some other code.
+    if return_val is None:
+        sys.exit(0)
+    elif isinstance(return_val, int):
+        sys.exit(return_val)
+    else:
+        tty.die("Bad return value from command %s: %s" % (args.command, return_val))
+
+#if args.profile:
+#    import cProfile
+#    cProfile.run('main()', sort='tottime')
+#elif args.pdb:
+#    import pdb
+#    pdb.run('main()')
+#else:
+#    main()
+main()

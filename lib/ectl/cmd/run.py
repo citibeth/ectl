@@ -57,11 +57,12 @@ def ompi_filter(cmd):
 
 
 def none_filter(cmd):
-    print('none_filter cmd = %s' % ' '.join(cmd))
     subprocess.call(cmd, stdout=sys.stdout, stderr=sys.stdout)
     sys.stdout.flush()
 
 def run(parser, args, unknown_args):
+    print('ectl running command: %s' % ' '.join(unknown_args))
+
     # ------ Parse Arguments
     module = sys.modules[__name__]
     filter_fn = getattr(module, args.filter + '_filter')

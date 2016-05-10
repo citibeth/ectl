@@ -1,3 +1,4 @@
+import ectl
 from ectl import rundeck
 
 import sys
@@ -11,6 +12,13 @@ from ectl import pathutil
 # TODO: Be careful not to leave around zero-length files when downloading
 
 # --------------------------------------
+def resolve_fname(run_dir):
+    """Given a user-generated rundir name, returns a pathname to it."""
+    if os.path.isabs(run_dir):
+        return run_dir
+    else:
+        return os.path.join(ectl.root, 'runs', run_dir)
+
 
 def namelist_time(suffix, dt):
     return 'YEAR{0}={1},MONTH{0}={2},DATE{0}={3},HOUR{0}={4},' \

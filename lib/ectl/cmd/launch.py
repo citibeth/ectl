@@ -77,7 +77,7 @@ def serial_launcher(cmd, fout, args):
 def launch(parser, args, unknown_args):
 
     # ------ Parse Arguments
-    run_dir = pathutil.search_file(args.rundir, [os.path.join(ectl.root, 'runs')])
+    run_dir = rundir.resolve_fname(args.rundir)
     modelexe = os.path.join(run_dir, 'pkg', 'bin', 'modelexe')
 
     module = sys.modules[__name__]

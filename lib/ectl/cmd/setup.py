@@ -22,8 +22,9 @@ def setup_parser(subparser):
     subparser.add_argument('--rundeck', '-rd', action='store', dest='rundeck',
         help='Rundeck to use in setup')
     subparser.add_argument('--timespan', '-ts', action='store', dest='timespan',
-        help='[iso8601],[iso8601],[iso8601] (start, cold-end, end) Timespan to run it for', default='')
-
+        help='[iso8601],[iso8601],[iso8601] (start, cold-end, end) Timespan to run it for')
+    subparser.add_argument('--src', '-s', action='store', dest='src',
+        help='Top-level directory of ModelE source')
 
 
 def parse_date(str):
@@ -75,12 +76,12 @@ def setup(parser, args, unknown_args):
     if len(unknown_args) > 0:
         raise ValueError('Unkown arguments: %s' % unknown_args)
 
-    run_dir = pathutil.search_file(args.rundir, [os.path.join(ectl.root, 'runs')])
+    run_dir = rundir.resolve_fname(args.rundir)
 
     start_ts = None
     cold_end_ts = None
     end_ts = None
-    if hasattr(args, 'timespan'):
+    if args.timespan is not None:
         tss = [parse_date(sdate.strip()) for sdate in args.timespan.split(',')]
         if len(tss) == 1:
             start_ts = tss[0]
@@ -119,7 +120,7 @@ def setup(parser, args, unknown_args):
 #        old_pkg_hash = pkghash(old_rd, old_src_dir)
 
     # ----- Determine the run_deck
-    new_run_deck = args.rundeck if hasattr(args, 'rundeck') else None
+    new_run_deck = os.path.abspath(args.rundeck)
     run_deck = new_run_deck or old_run_deck
     if run_deck is None:
         raise ValueError('No rundeck specified!')
@@ -127,7 +128,7 @@ def setup(parser, args, unknown_args):
         tty.warn('Rundeck changing from %s to %s', old_run_deck, run_deck)
 
     # -------- Determine the src_dir
-    new_src_dir = pathutil.modele_root(run_deck)
+    new_src_dir = args.src or pathutil.modele_root(run_deck)
     src_dir = new_src_dir or old_src_dir
     if src_dir is None:
         raise ValueError('No source directory specified!')

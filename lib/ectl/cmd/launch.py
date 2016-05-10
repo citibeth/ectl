@@ -85,7 +85,7 @@ def launch(parser, args, unknown_args):
 
 
     # -------- Construct the main command line
-    cmd = [os.path.join(ectl.root, 'bin', 'ectl'), 'run'] + unknown_args + [modelexe]
+    cmd = [os.path.join(ectl.root_exe, 'bin', 'ectl'), 'run'] + unknown_args + [modelexe]
     if args.restart or rundir.status(run_dir) == rundir.INITIAL:
         cmd.append('-cold-restart')
     cmd.append('-i')

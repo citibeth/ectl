@@ -60,6 +60,7 @@ def fg_launcher(cmd, fout, args):
         np = detect_ncores()
 
     cmd = ['mpirun', '-np', str(np)] + cmd
+    print('fg_launcher cmd = %s' % ' '.join(cmd))
     fout.write('fg_launcher cmd = %s\n' % ' '.join(cmd))
     fout.flush()
     subprocess.call(cmd, stdout=fout, stderr=fout)
@@ -85,7 +86,7 @@ def launch(parser, args, unknown_args):
 
 
     # -------- Construct the main command line
-    cmd = [os.path.join(ectl.root_exe, 'bin', 'ectl'), 'run'] + unknown_args + [modelexe]
+    cmd = [os.path.join(ectl.root, 'bin', 'ectl'), 'run'] + unknown_args + [modelexe]
     if args.restart or rundir.status(run_dir) == rundir.INITIAL:
         cmd.append('-cold-restart')
     cmd.append('-i')

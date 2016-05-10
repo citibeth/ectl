@@ -188,8 +188,7 @@ class Params(dict):
                         print(e2)
                         raise
                     except Exception as e2:
-                        print(e2)
-                        sys.stderr.write('{}: {}\n'.format(param.pname, e))
+                        sys.stderr.write('{}: {}\n'.format(param.pname, e2))
                         good = False
 
                     ret = False    # Error condition

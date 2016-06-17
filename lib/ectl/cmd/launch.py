@@ -12,6 +12,7 @@ from ectl import iso8601
 import StringIO
 import subprocess
 import sys
+import shutil
 
 description = 'Creates a flat rundeck file (eg: make rundeck)'
 
@@ -20,7 +21,7 @@ def setup_parser(subparser):
         'rundir', help='Directory of run to give execution command')
     subparser.add_argument('--restart', action='store_true', dest='restart', default=False,
         help="Restart the run, even if it's already started")
-    subparser.add_argument('-o', action='store', dest='output_fname', default='PRT',
+    subparser.add_argument('-o', action='store', dest='log_dir',
         help="Name of file for output (relative to rundir); '-' means STDOUT")
     subparser.add_argument('-l', '--launcher', action='store', dest='launcher', default='fg',
         choices=['fg', 'serial', 'slurm', 'slurm-debug'],
@@ -53,18 +54,14 @@ def detect_ncores():
     return cpus // threads
 
 
-def fg_launcher(cmd, fout, args):
-    if args.np is not None:
-        np = int(args.np)
-    else:
-        np = detect_ncores()
+def fg_launcher(mpi_cmd, modele_cmd, np=None):
+    # --------- determine number of processors to use
+    np = int(np) if np is not None else detect_ncores()
+    mpi_cmd.extend(['-np', str(np)])
+    cmd = mpi_cmd + modele_cmd
 
-    cmd = ['mpirun', '-np', str(np)] + cmd
-    print('fg_launcher cmd = %s' % ' '.join(cmd))
-    fout.write('fg_launcher cmd = %s\n' % ' '.join(cmd))
-    fout.flush()
-    subprocess.call(cmd, stdout=fout, stderr=fout)
-    fout.flush()
+    print(' '.join(cmd))
+    subprocess.call(mpi_cmd + modele_cmd)
 
 def serial_launcher(cmd, fout, args):
     fout.write('serial_launcher cmd = %s\n' % ' '.join(cmd))
@@ -76,6 +73,8 @@ def serial_launcher(cmd, fout, args):
 
 
 def launch(parser, args, unknown_args):
+    if len(unknown_args) > 0:
+        raise ValueError('Unkown arguments: %s' % unknown_args)
 
     # ------ Parse Arguments
     run_dir = rundir.resolve_fname(args.rundir)
@@ -84,23 +83,46 @@ def launch(parser, args, unknown_args):
     module = sys.modules[__name__]
     launcher_fn = getattr(module, args.launcher + '_launcher')
 
+    if args.log_dir is not None:
+        if args.log_dir == '-':
+            log_dir = args.log_dir
+        else:
+            log_dir = os.path.abspath(ags.log_dir)
+    else:
+        log_dir = os.path.join(run_dir, 'log')
+
 
     # -------- Construct the main command line
-    cmd = [os.path.join(ectl.root, 'bin', 'ectl'), 'run'] + unknown_args + [modelexe]
+    mpi_cmd = ['mpirun', '-timestamp-output']
+
+    # -------- Determine log file(s)
+    if log_dir != '-':
+        try:
+            shutil.rmtree(log_dir)
+        except:
+            pass
+        os.mkdir(log_dir)
+
+        log_main = os.path.join(run_dir,'log0')
+        try:
+            os.remove(log_main)
+        except:
+            pass
+        os.symlink(os.path.join(log_dir, 'l.1.0'), log_main)
+        mpi_cmd.append('-output-filename')
+        mpi_cmd.append(os.path.join(log_dir, 'q'))
+
+    # ------ Add modele to the command
+    modele_cmd = [modelexe]
     if args.restart or rundir.status(run_dir) == rundir.INITIAL:
-        cmd.append('-cold-restart')
-    cmd.append('-i')
-    cmd.append('I')
+        modele_cmd.append('-cold-restart')
+    modele_cmd.append('-i')
+    modele_cmd.append('I')
 
     # ------- Open output file
     os.chdir(run_dir)
-    if args.output_fname == '-':
-        fout = sys.stdout
-    else:
-        #rename_file(args.output_fname)
-        fout = open(args.output_fname, 'w')
 
     # ------- Run it!
-    launcher_fn(cmd, fout, args)
+    launcher_fn(mpi_cmd, modele_cmd, np=args.np)
 
 

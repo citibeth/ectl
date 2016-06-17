@@ -1,6 +1,7 @@
 import ectl
 from ectl import rundeck
 
+import re
 import sys
 import os
 import string
@@ -114,6 +115,7 @@ RUNNING=1
 PAUSED=2
 FINISHED=3
 
+accRE = re.compile('(.*?)\.acc(.*?)\.nc')
 def status(run_dir):
     """Determines whether a run directory is:
         INITIAL: Run not yet begun
@@ -128,18 +130,19 @@ def status(run_dir):
     # First, check for any netCDF files.  If there are NO such files,
     # then we've never run.
     has_nc = False
-    for file in files:
-        if file[-3:] == '.nc':
-            has_nc = True
-            break
-    if not has_nc:
-        return INITIAL
 
-    # Check for fort.1.nc and fort.2.nc
-    if not (('fort.1.nc' in files) or ('fort.2.nc' in files)):
-        # No fort.x.nc files, we cannot continue the run
+    fort_files = ('fort.1.nc' in files) or ('fort.2.nc' in files)
+
+    if fort_files:
+        return PAUSED
+
+    acc_files = False
+    for file in files:
+        if accRE.match(file) != None:
+            acc_files = True
+            break
+
+    if acc_files:
         return FINISHED
 
-    # It's not INITIAL or FINISHED, assume PAUSED
-    # (until we know better how to detect the loc file)
-    return PAUSED
+    return INITIAL

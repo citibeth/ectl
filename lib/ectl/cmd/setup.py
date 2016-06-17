@@ -120,7 +120,7 @@ def setup(parser, args, unknown_args):
 #        old_pkg_hash = pkghash(old_rd, old_src_dir)
 
     # ----- Determine the run_deck
-    new_run_deck = os.path.abspath(args.rundeck)
+    new_run_deck = os.path.abspath(args.rundeck) if args.rundeck is not None else None
     run_deck = new_run_deck or old_run_deck
     if run_deck is None:
         raise ValueError('No rundeck specified!')

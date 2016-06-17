@@ -24,7 +24,7 @@ def follow_link(linkname, must_exist=False):
     return fname
 
 def purge(parser, args, unknown_args):
-    if len(unkown_args) > 0:
+    if len(unknown_args) > 0:
         raise ValueError('Unkown arguments: %s' % unknown_args)
 
     # ------- Find used packages and builds

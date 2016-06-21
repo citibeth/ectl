@@ -1,0 +1,54 @@
+import os
+from ectl import pathutil
+
+
+class Config(object):
+    """General configuration of where things are stored in this Ectl
+    instance."""
+
+    def __init__(self, ectl=None, rundeck=None, run=None):
+        self.ectl = None    # Root of ectl tree
+        self.runs = None        # Where to create run directories, if needed
+        self.builds = None      # Where to create build directories, if needed
+        self.pkgs = None        # Where to create pkg directories, if needed
+
+
+        if ectl is not None:
+            print('Getting config from ectl')
+            self.ectl = os.path.abspath(ectl)
+            self.runs = os.path.join(self.ectl, 'runs')
+            self.builds = os.path.join(self.ectl, 'builds')
+            self.pkgs = os.path.join(self.ectl, 'pkgs')
+        elif os.path.exists(run):
+            print('Getting config from run')
+
+            # Determine directories from existing run
+            self.runs = os.path.abspath(os.path.join(run, '..'))
+
+            build = pathutil.follow_link(os.path.join(run, 'build'))
+            self.builds = os.path.abspath(os.path.join(build, '..'))
+            ectl_build = os.path.abspath(os.path.join(self.builds, '..'))
+
+            pkg = pathutil.follow_link(os.path.join(run, 'pkg'))
+            self.pkgs = os.path.abspath(os.path.join(pkg, '..'))
+            ectl_pkg = os.path.abspath(os.path.join(self.pkgs, '..'))
+
+            if ectl_build == ectl_pkg:
+                self.ectl = ectl_build
+        elif rundeck is not None:
+            print('Getting config from rundeck')
+
+            # We're given a rundeck: search up for ectl.conf
+            start_path = os.path.split(os.path.abspath(run))[0]
+
+            # Find the root of the ectl tree
+            ectl_conf = pathutil.search_up(start_path,
+                lambda path: pathutil.has_file(path, 'ectl.conf'))
+
+            if ectl_conf is None:
+                raise ValueError('Could not find ectl.conf starting from %s' % start_path)
+
+            self.ectl = os.path.split(ectl_conf)[0]
+            self.runs = os.path.join(self.ectl, 'runs')
+            self.builds = os.path.join(self.ectl, 'builds')
+            self.pkgs = os.path.join(self.ectl, 'pkgs')

@@ -37,6 +37,35 @@ def modele_root(fname):
 #            raise ValueError('File %s does not appear to be in a ModelE source directory.' % fname)
         path = new_path
 
+def has_file(path, fname):
+    ret = os.path.join(path, fname)
+    if os.path.exists(ret):
+        return ret
+    return None
+
+def search_up(path, condition_fn):
+    """Scans up a directory tree until a condition is found on one of the paths."""
+
+    path = os.path.abspath(path)#os.path.split(fname)[0])
+    while True:
+        ret = condition_fn(path)
+        if ret is not None:
+            return ret
+        new_path = os.path.dirname(path)
+        if new_path == path:
+            # Didn't find it.
+            return None
+        path = new_path
+
+def follow_link(linkname, must_exist=False):
+    if not os.path.exists(linkname):
+        return None
+    fname = os.path.realpath(linkname)
+    if must_exist and not os.path.exists(fname):
+        return None
+    return fname
+
+
 class ChangePythonPath(object):
     """Context manager that temporarily changes sys.path"""
     def __init__(self, new_path):

@@ -13,6 +13,8 @@ import StringIO
 import subprocess
 import sys
 import shutil
+from ectl import iso8601
+import datetime
 
 description = 'Creates a flat rundeck file (eg: make rundeck)'
 
@@ -21,6 +23,8 @@ def setup_parser(subparser):
         'rundir', help='Directory of run to give execution command')
     subparser.add_argument('--restart', action='store_true', dest='restart', default=False,
         help="Restart the run, even if it's already started")
+    subparser.add_argument('--end', '-e', action='store', dest='end',
+        help='[iso8601] Time to stop the run')
     subparser.add_argument('-o', action='store', dest='log_dir',
         help="Name of file for output (relative to rundir); '-' means STDOUT")
     subparser.add_argument('-l', '--launcher', action='store', dest='launcher', default='fg',
@@ -77,7 +81,8 @@ def launch(parser, args, unknown_args):
         raise ValueError('Unkown arguments: %s' % unknown_args)
 
     # ------ Parse Arguments
-    run_dir = rundir.resolve_fname(args.rundir)
+    run_dir = os.path.abspath(args.rundir) #rundir.resolve_fname(args.rundir)
+    cold_restart = args.restart or (rundir.status(run_dir) == rundir.INITIAL)
     modelexe = os.path.join(run_dir, 'pkg', 'bin', 'modelexe')
 
     module = sys.modules[__name__]
@@ -90,6 +95,22 @@ def launch(parser, args, unknown_args):
             log_dir = os.path.abspath(ags.log_dir)
     else:
         log_dir = os.path.join(run_dir, 'log')
+
+    # ------- Load the rundeck and rewrite the I file
+    try:
+        rd = rundeck.load(os.path.join(run_dir, 'flat.R'))
+
+        # Send end date
+        if args.end is not None:
+            end = datetime.datetime(*iso8601.parse_date(args.end))
+            rd.set(('INPUTZ_cold' if cold_restart else 'INPUTZ', 'END_TIME'), end)
+
+        sections = rundeck.ParamSections(rd)
+        rundir.write_I(rd.preamble, sections, os.path.join(run_dir, 'I'))
+
+    except IOError:
+        print 'Warning: Cannot load flat.R.  NOT rewriting I file'
+    
 
 
     # -------- Construct the main command line
@@ -114,7 +135,7 @@ def launch(parser, args, unknown_args):
 
     # ------ Add modele to the command
     modele_cmd = [modelexe]
-    if args.restart or rundir.status(run_dir) == rundir.INITIAL:
+    if cold_restart:
         modele_cmd.append('-cold-restart')
     modele_cmd.append('-i')
     modele_cmd.append('I')

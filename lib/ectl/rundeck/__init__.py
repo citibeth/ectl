@@ -1,4 +1,5 @@
 from __future__ import print_function
+import ectl.rundeck
 from ectl.rundeck import legacy
 import datetime
 import os
@@ -82,11 +83,11 @@ def replace_date(dd, suffix, result):
 
 # ----------------------------------------------------------
 class Param(object):
-    def __init__(self, pname, type, value, provenance=None):
+    def __init__(self, pname, type, value, line=None):
         self.pname = pname
         self.type = type
         self.value = value
-        self.provenance = provenance    # Info on where this came from: line number, filename, raw line, etc.
+        self.lines = [line]    # Info on where this came from: line number, filename, raw line, etc.
         self.rval = None    # Resolved value (i.e. full pathname)
 
         if self.type == DATETIME:
@@ -98,6 +99,10 @@ class Param(object):
             if (dt.tzinfo is not None):
                 raise ValueError('Values of type DATETYPE cannot have a timezone.  Error in: {}'.format(dt))
 
+    @property
+    def line(self):
+        return self.lines[-1]
+
     def __lt__(self, other):
         return self.pname < other.pname
 
@@ -108,7 +113,7 @@ class Param(object):
         return '.'.join(pname)
 
 class Params(dict):
-    def set(self, pname, value, type=None, provenance=None):
+    def set(self, pname, value, type=None, line=None):
         # Determine the type of the parameter, if not set
         if type is None:
             if isinstance(value, datetime.date) or isinstance(value, datetime.datetime):
@@ -116,47 +121,48 @@ class Params(dict):
             else:
                 type = GENERAL
 
-        param = Param(pname, type, value, provenance=provenance)
+        try:
+            param = self[pname]
+            param.__init__(pname, type, value)
+            param.lines.append(line)
+        except KeyError:
+            param = Param(pname, type, value, line=line)
+            self[pname] = param
+        if line is not None:
+            line.param = param
 
         # Full pathnames are already resolved...
         if (type == FILE) and (len(os.path.split(value)[0]) > 0):
             param.rval = param.value
 
-        # Set history of now-defunct values...
-        param.history = []
-        try:
-            param.history = self[param.pname].history
-            param.history.append(param.provenance)
-        except:
-            pass
-
-        self[param.pname] = param
         return param
 
     def add_legacy(self, legacy):
         """Extract rundeck parametesr from a legacy rundeck."""
         ret = True
-        for symbol,fname,provenance in legacy['Data input files']:
-#            print(provenance)    # lineno,line
-            self.set(symbol, fname, type=FILE)
+        for line in legacy.sections['Data input files'].parsed_lines():
+            symbol,fname = line.parsed
+            self.set(symbol, fname, type=FILE, line=line)
 
-        for symbol,value,provenance in legacy['Parameters']:
-            self.set(symbol, value, type=GENERAL)
+        for line in legacy.sections['Parameters'].parsed_lines():
+            symbol,value = line.parsed
+            self.set(symbol, value, type=GENERAL, line=line)
 
         # ------- Deal with the namelists
 
         # Split into a series of namelists, splitting on 'ISTART=...'
-        inputz = legacy['InputZ']
+        inputz = legacy.sections['InputZ']
         inputzs = list()
         inputz_cur = list()
-        for item in inputz:
-            if item[0].upper() == 'ISTART':
-                if len(inputz_cur) > 0:
-                    inputzs.append(dict(inputz_cur))
-                inputz_cur = list()
-            inputz_cur.append((item[0].upper(), item[1]))
+        for line in inputz.parsed_lines():
+            for item in line.parsed:
+                if item[0].upper() == 'ISTART':
+                    if len(inputz_cur) > 0:
+                        inputzs.append(dict(inputz_cur))
+                    inputz_cur = list()
+                inputz_cur.append((item[0].upper(), item[1]))
         inputzs.append(dict(inputz_cur))
-    
+
         for inputz in inputzs:
             replace_date(inputz, 'I', 'START_TIME')
             replace_date(inputz, 'E', 'END_TIME')
@@ -242,17 +248,35 @@ class Build(object):
 #         print(self.components)
 
     def add_legacy(self, legacy):
-        for src in legacy['Object Modules']:
-            self.sources.add(src)
-        for symbol,value,provenance in legacy['Preprocessor Options']:
-            self.defines[symbol] = value
-        for component in legacy['Components']:
-            self.components[component] = None
+        for line in legacy.sections['Object Modules'].parsed_lines():
+            for src in line.parsed:
+                self.sources.add(src)
 
-        for component,options,provenance in legacy['Component Options']:
+        for line in legacy.sections['Preprocessor Options'].parsed_lines():
+            symbol,value = line.parsed
+            self.defines[symbol] = value
+
+        for line in legacy.sections['Components'].parsed_lines():
+            for component in line.parsed:
+                self.components[component] = None
+
+        for line in legacy.sections['Component Options'].parsed_lines():
+            component,options = line.parsed
             if component not in self.components:
                 raise ValueError('Options found for non-existant component %s' % component)
             self.components[component] = dict(options)
+
+
+def inputz_key(line):
+    prefix = line[:5]
+    if prefix == 'ISTAR':
+        return '@@0'
+    elif prefix == 'YEARI':
+        return '@@1'
+    elif prefix == 'YEARE':
+        return '@@2'
+    else:
+        return line
 
 
 class Rundeck(object):
@@ -269,7 +293,8 @@ class Rundeck(object):
         xhash.update(self.build, hash)
 
     def add_legacy(self, legacy):
-        self.preamble = legacy['preamble']
+        self.legacy = legacy
+        self.preamble = legacy.sections['preamble']
         self.params.add_legacy(legacy)
         self.build.add_legacy(legacy)
 
@@ -286,6 +311,80 @@ class Rundeck(object):
             '-------- Defines', \
             repr(self.build.defines)))
 
+
+    def write(self, out, sections=None, comments=True):
+        # Determine param associated with each line in original rundeck.
+        # This allows us to make changes as needed.
+    #    params_by_line = dict()
+    #    for param in self.params.values():
+    #        for line in param.lines:
+    #            params_by_line[line] = param
+
+        if sections is None:
+            isections = set(section.isection for section in self.legacy.sections.values())
+        else:
+            isections = set(self.legacy.sections[section].isection for section in sections)
+
+        ps = ParamSections(self)
+        ps.inputz.sort(key=inputz_key)
+        ps.inputz_cold.sort(key=inputz_key)
+
+        parameters_is = self.legacy.sections['Parameters'].isection
+        inputz_is = self.legacy.sections['InputZ'].isection
+
+        inputz_written = False
+
+        for line in self.legacy.lines:
+            if line.isection not in isections:
+                continue
+            if comments:
+                raw = line.raw
+            else:
+                raw = line.remove_comments()+'\n'
+
+            if line.isection == parameters_is:
+                # Find param that this line originally set.
+                param = line.param
+
+
+                # Header lines, etc.
+                if param is None:
+                    if comments:
+                        out.write(raw)
+                    continue
+
+                # If this param has been deleted, don't write it out!
+                if param.pname not in self.params:
+                    out.write('!'+raw)
+                    continue
+
+                # Write the line that most recently set this param.
+                last_line = param.lines[-1]
+                if last_line is not None:
+                    if comments:
+                        out.write(last_line.raw)
+                    else:
+                        out.write(last_line.remove_comments()+'\n')
+                else:
+                    # There's no raw line; we must make something up
+                    out.write('%s=%s\n' % (param.name, param.value))
+            elif line.isection == inputz_is:
+#                if line.parsed is None:
+#                    out.write(raw)
+#                    continue
+
+                if inputz_written:
+                    continue
+
+                out.write('\n &INPUTZ\n ')
+                out.write('\n '.join(ps.inputz))
+                out.write('\n ')
+                out.write('\n '.join(ps.inputz_cold))
+                out.write('\n/\n')
+
+                inputz_written = True
+            else:
+                out.write(raw)
 
 # ----------------------------------------------------
 def load(fname, modele_root=None, template_path=None):
@@ -310,12 +409,60 @@ def load(fname, modele_root=None, template_path=None):
 
     root,ext = os.path.splitext(leafname)
     fin = legacy.preprocessor(fname, template_path)
-    legacy_rundeck = legacy.read_rundeck(fin)    # Auto-closes
+    legacy_rundeck = legacy.LegacyRundeck(fin)    # Auto-closes
     rd.add_legacy(legacy_rundeck)
-
-    # Read it again...
-    lines = [x[1] for x in legacy.preprocessor(fname, template_path)]
-    rd.raw_rundeck = lines
 
 
     return rd
+# ----------------------------------------------------
+def namelist_time(suffix, dt):
+    return 'YEAR{0}={1},MONTH{0}={2},DATE{0}={3},HOUR{0}={4},' \
+        .format(suffix,dt.year,dt.month,dt.day,dt.hour)
+
+
+class ParamSections(object):
+    def __init__(self, rd):
+        """params: rd.params"""
+
+        # output line sections
+        self.parameters = []
+        self.data_files = []
+        self.data_lines = []
+        self.inputz = []
+        self.inputz_cold = []
+
+        # Organize self.parameters into ModelE sections
+        for param in sorted(list(rd.params.values())):
+            pname = param.pname
+            if isinstance(pname, str):    # Non-compound name
+                if (id(param.type) == id(ectl.rundeck.FILE)):
+                    if param.rval is not None:
+                        self.data_lines.append(" _file_{}='{}'".format(pname, param.rval))
+                        self.data_files.append((pname, param.rval))
+    #                else:
+    #                    self.parameters.append("! Not Found: {}={}".format(pname, param.sval))
+
+                elif (id(param.type) == id(ectl.rundeck.GENERAL)):
+                    self.parameters.append(' %s=%s' % (param.pname, param.value))
+                elif (id(param.type) == id(ectl.rundeck.DATETIME)):
+                    raise ValueError('Cannot put DATETIME values into self.parameters section of rundeck.')
+                else:
+                    raise ValueError('Unknown parameter type %s' % param.type)
+            elif len(pname) == 2:
+                if pname[0].lower() == 'inputz':
+                    iz = self.inputz
+                elif pname[0].lower() == 'inputz_cold':
+                    iz = self.inputz_cold
+                else:
+                    raise ValueError('Unknown compound name: {}'.format(pname))
+
+                if pname[1].upper() == 'END_TIME':
+                    iz.append(namelist_time('E', param.value))
+                elif pname[1].upper() == 'START_TIME':
+                    iz.append(namelist_time('I', param.value))
+                else:
+                    line = '{}={},'.format(pname[1],param.value)
+                    iz.append(line)
+
+
+

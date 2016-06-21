@@ -5,20 +5,26 @@ import argparse
 import llnl.util.tty as tty
 import ectl
 import ectl.cmd
-from ectl import pathutil,rundeck,rundir,xhash,srcdir
+from ectl import pathutil,rundir,xhash,srcdir
+import ectl.config
+import ectl.rundeck
+from ectl.rundeck import legacy
 import subprocess
 import base64
 import re
 from ectl import iso8601
 import datetime
+import sys
 
 description = 'Setup a ModelE run.'
 
 def setup_parser(subparser):
 #    subparser.add_argument(
 #        'rundeck', nargs=1, help='Rundeck file use in setup.')
+    subparser.add_argument('--ectl', action='store', dest='ectl',
+        help='Root of ectl tree: ectl/runs, ectl/builds, ectl/pkgs')
     subparser.add_argument(
-        'rundir', help='Directory of run to setup (inside ectl)')
+        'run', help='Directory of run to setup')
     subparser.add_argument('--rundeck', '-rd', action='store', dest='rundeck',
         help='Rundeck to use in setup')
     subparser.add_argument('--timespan', '-ts', action='store', dest='timespan',
@@ -31,14 +37,6 @@ def parse_date(str):
     if len(str) == 0:
         return None
     return iso8601.parse_date(str)
-
-def follow_link(linkname, must_exist=False):
-    if not os.path.exists(linkname):
-        return None
-    fname = os.path.realpath(linkname)
-    if must_exist and not os.path.exists(fname):
-        return None
-    return fname
 
 def buildhash(rd, src_dir):
     hash = hashlib.md5()
@@ -63,21 +61,21 @@ def good_pkg_dir(pkg_dir):
 
 
 def set_link(src, dst):
-    """Links src to dst, but only if it's not ALREADY linked that way."""
-    print('src=',src)
-    print('dst=',dst)
+    """Like doing ln -s src dst"""
     if os.path.islink(dst):
-        if os.path.realpath(dst) == src:
+        if os.path.abspath(os.path.realpath(dst)) == os.path.abspath(src):
             return
         os.remove(dst)
-    os.symlink(src, dst)
+    src_rel = os.path.relpath(src, start=os.path.split(dst)[0])
+    os.symlink(src_rel, dst)
 
 def setup(parser, args, unknown_args):
+    args.run = os.path.abspath(args.run)
     if len(unknown_args) > 0:
         raise ValueError('Unkown arguments: %s' % unknown_args)
 
-    run_dir = rundir.resolve_fname(args.rundir)
 
+    # Parse out timespan
     start_ts = None
     cold_end_ts = None
     end_ts = None
@@ -97,101 +95,163 @@ def setup(parser, args, unknown_args):
             raise ValueError('Invalid timespan %s' % args.timespan)
 
     # ---------------
+    # Get ectl directories
+    config = ectl.config.Config(rundeck=args.rundeck, run=args.run)
+    print('-------- Ectl Config:')
+    print('    ectl:   %s' % config.ectl)
+    print('    runs:   %s' % config.runs)
+    print('    builds: %s' % config.builds)
+    print('    pkgs:   %s' % config.pkgs)
 
     # Get src, build and pkg directories the last time setup was run.
     # (None if they don't exist)
-    old_run_deck = follow_link(os.path.join(run_dir, 'rundeck.R'), must_exist=True)
-    old_src_dir = follow_link(os.path.join(run_dir, 'src'), must_exist=True)
-    old_build_dir = follow_link(os.path.join(run_dir, 'build'))
-    old_pkg_dir = follow_link(os.path.join(run_dir, 'pkg'))
-    status = rundir.status(run_dir)
+    old = rundir.FollowLinks(args.run)
+    status = rundir.status(args.run)
 
-    print('-------- Old Configuration:')
-    print('run_deck:   %s' % old_run_deck)
-    print('src_dir:    %s' % old_src_dir)
-    print('build_dir:  %s' % old_build_dir)
-    print('pkg_dir:    %s' % old_pkg_dir)
-    print('run status: %d' % status)
+    print('\nRun: %s' % args.run)
+    print('-------- Old Setup:')
+    print('    rundeck: %s' % old.rundeck)
+#    print('    run:     %s' % old.run)
+    print('    src:     %s' % old.src)
+    print('    build:   %s' % old.build)
+    print('    pkg:     %s' % old.pkg)
+    print('    status:  %d' % status)
 
-    old_rd = None
-    if (old_run_deck is not None) and (old_src_dir is not None):
-        old_rd = rundeck.load(old_run_deck, modele_root=old_src_dir)
-#        old_build_hash = buildhash(old_rd, old_src_dir)
-#        old_pkg_hash = pkghash(old_rd, old_src_dir)
-
-    # ----- Determine the run_deck
-    new_run_deck = os.path.abspath(args.rundeck) if args.rundeck is not None else None
-    run_deck = new_run_deck or old_run_deck
-    if run_deck is None:
+    # ----- Determine the rundeck
+    new_rundeck = os.path.abspath(args.rundeck) if args.rundeck is not None else None
+    rundeck = new_rundeck or old.rundeck
+    if rundeck is None:
         raise ValueError('No rundeck specified!')
-    if (status > rundir.INITIAL) and (old_run_deck is not None) and (run_deck != old_run_deck):
-        tty.warn('Rundeck changing from %s to %s', old_run_deck, run_deck)
+    if (status > rundir.INITIAL) and (old.rundeck is not None) and (rundeck != old.rundeck):
+        raise ValueError('Cannot change rundeck (to %s)' % (rundeck))
+#        tty.warn('Rundeck changing from %s to %s' % (old.rundeck, rundeck))
 
-    # -------- Determine the src_dir
-    new_src_dir = args.src or pathutil.modele_root(run_deck)
-    src_dir = new_src_dir or old_src_dir
-    if src_dir is None:
+    # -------- Determine the src
+    new_src = args.src or pathutil.modele_root(rundeck)
+    src = new_src or old.src
+    if src is None:
         raise ValueError('No source directory specified!')
-    if (status > rundir.INITIAL) and (old_src_dir is not None) and (src_dir != old_src_dir):
-        raise ValueError('Cannot change src_dir to %s', src_dir)
+    if (status > rundir.INITIAL) and (old.src is not None) and (src != old.src):
+        raise ValueError('Cannot change src (to %s)' % src)
 
-    if not os.path.isdir(src_dir):
-        raise ValueError('src_dir %s does not exist!' % src_dir)
+    if not os.path.isdir(src):
+        raise ValueError('src %s does not exist!' % src)
 
 
     # ------ Read the rundeck and determine hashes
-    rd = rundeck.load(run_deck, modele_root=src_dir)
 
-    # ------ Determine build_dir; cannot change
-    build_hash = buildhash(rd, src_dir)
-    build_dir = os.path.join(ectl.root, 'builds', build_hash)
-    if (status > rundir.INITIAL) and (old_build_dir is not None) and (build_dir != old_build_dir):
-        raise ValueError('Cannot change build_dir to %s', build_dir)
+    # Load the system-provided rundeck
+    rd = ectl.rundeck.load(rundeck, modele_root=src)
 
-    # ------ Determine pkg_dir
-    pkg_hash = pkghash(rd, src_dir)
-    pkg_dir = os.path.join(ectl.root, 'pkgs', pkg_hash)
+    # (Read most updated version of the rundeck...)
+    try:
+        # flat.R, as originally written from rundeck.R (not edited)
+        rdf0 = ectl.rundeck.load(os.path.join(args.run, 'flat0.R'), template_path=[])
+        # flat.R, possibly edited
+        rdf = ectl.rundeck.load(os.path.join(args.run, 'flat.R'), template_path=[])
 
-    # ------ Re-build only if our pkg_dir is not good
-    if not good_pkg_dir(pkg_dir):
+        # Merge anything changes in flat.R into the newly-read main rundeck.
+        print('----- Merging rundecks')
+        processed_keys = set()
+        for key,param in rdf.params.items():
+            processed_keys.add(key)
+            try:
+                param0 = rdf0.params[key]
+                # Key in rdf0 and rdf
+                # See if it's changed...
+                if (param0.value != param.value) and (key in rd.params):
+                    print('    {}: {} -> {}'.format(key, rd.params[key].value, param.value))
+                    rd.set(key, param.value, line=param.line)
+            except KeyError:
+                # Key in rdf but not rdf0
+                # Set in rundeck as well
+                    print('    {}: {}'.format(key, param.value))
+                    rd.set(key, param.value, line=param.line)
+
+        # Mention keys that were in rdf0 and now on longer in rdf
+        for key0,param0 in rdf0.params.items():
+            if key0 in processed_keys:
+                continue
+            del rd.params[key0]
+            print('    {}: (REMOVED)'.format(key0))
+
+    except IOError as e:
+        print(e)
+        print('    Cannot read flat.R or flat0.R; not merging rundecks.')
+        pass
+
+
+    # Create flat0.R (original rundeck) if the file doesn't yet exist.
+    fname = os.path.join(args.run, 'flat0.R')
+    if not os.path.exists(fname):
+        with open(fname, 'w') as out:
+            for line in rd.legacy.lines:
+                out.write(line)
+
+    # ------ Determine build; cannot change
+    build_hash = buildhash(rd, src)
+    build = os.path.join(config.builds, build_hash)
+    if (status > rundir.INITIAL) and (old.build is not None) and (build != old.build):
+        raise ValueError('Cannot change build to %s', build)
+
+    # ------ Determine pkg
+    pkg_hash = pkghash(rd, src)
+    pkg = os.path.join(config.pkgs, pkg_hash)
+
+    print('-------- New Setup:')
+    print('    rundeck: %s' % rundeck)
+    print('    src:     %s' % src)
+    print('    build:   %s' % build)
+    print('    pkg:     %s' % pkg)
+
+    # ------ Re-build only if our pkg is not good
+    if not good_pkg_dir(pkg):
         # number of jobs spack will to build with.
         jobs = multiprocessing.cpu_count()
 
         # Create the build dir if it doesn't already exist
-        if not os.path.isdir(build_dir):
-            os.makedirs(build_dir)
-        os.chdir(build_dir)
-        subprocess.check_call([os.path.join(src_dir, 'spconfig.py'),
-            '-DRUN=%s' % run_deck,
-            '-DCMAKE_INSTALL_PREFIX=%s' % pkg_dir,
-            src_dir])
+        if not os.path.isdir(build):
+            os.makedirs(build)
+        os.chdir(build)
+        subprocess.check_call([os.path.join(src, 'spconfig.py'),
+            '-DRUN=%s' % rundeck,
+            '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
+            src])
         subprocess.check_call(['make', 'install', '-j%d' % jobs])
 
-    # ---- Create run_dir
-    if not os.path.isdir(run_dir):
-        os.makedirs(run_dir)
+    # ---- Create args.run
+    if not os.path.isdir(args.run):
+        os.makedirs(args.run)
 
     # ------------------ Download input files
-    rd.resolve(file_path=rundeck.default_file_path, download=True,
-        download_dir=rundeck.default_file_path[0])
+    
+    rd.resolve(file_path=ectl.rundeck.default_file_path, download=True,
+        download_dir=ectl.rundeck.default_file_path[0])
 
     # ---- Create data file symlinks and I file
-    print('sss', start_ts, end_ts)
     if start_ts is not None:
         rd.set(('INPUTZ', 'START_TIME'), datetime.datetime(*start_ts))
     if cold_end_ts is not None:
         rd.set(('INPUTZ_cold', 'END_TIME'), datetime.datetime(*cold_end_ts))
     if end_ts is not None:
         rd.set(('INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
-    rundir.make_rundir(rd, run_dir)
+    rundir.make_rundir(rd, args.run)
+
+    # Write flat.R, the rundeck we are setting up
+    with open(os.path.join(args.run, 'flat.R'), 'w') as out:
+        rd.write(out)
 
     # ---- Copy in original rundeck...
-    rundeck_leafname = os.path.split(run_deck)[1]
-    with open(os.path.join(run_dir, 'flat.R'), 'w') as fout:
-        fout.write(''.join(rd.raw_rundeck))
+#    rundeck_leafname = os.path.split(rundeck)[1]
+#    with open(os.path.join(args.run, 'flat.R'), 'w') as fout:
+#        fout.write(''.join(rd.raw_rundeck))
+#    flat0_fname = os.path.join(args.run, 'flat0.R')
+#    if not os.path.exists(flat0_fname):
+#        with open(flat0_fname, 'w') as fout:
+#            fout.write(''.join(rd.raw_rundeck))
 
     # ------------- Set directory symlinks
-    set_link(run_deck, os.path.join(run_dir, 'rundeck.R'))
-    set_link(src_dir, os.path.join(run_dir, 'src'))
-    set_link(build_dir, os.path.join(run_dir, 'build'))
-    set_link(pkg_dir, os.path.join(run_dir, 'pkg'))
+    set_link(rundeck, os.path.join(args.run, 'rundeck.R'))
+    set_link(src, os.path.join(args.run, 'src'))
+    set_link(build, os.path.join(args.run, 'build'))
+    set_link(pkg, os.path.join(args.run, 'pkg'))

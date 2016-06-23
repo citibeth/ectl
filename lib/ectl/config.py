@@ -1,3 +1,4 @@
+from __future__ import print_function
 import os
 from ectl import pathutil
 
@@ -13,42 +14,50 @@ class Config(object):
         self.pkgs = None        # Where to create pkg directories, if needed
 
 
+        # We are given an ectl root... EASY!
         if ectl is not None:
             print('Getting config from ectl')
             self.ectl = os.path.abspath(ectl)
             self.runs = os.path.join(self.ectl, 'runs')
             self.builds = os.path.join(self.ectl, 'builds')
             self.pkgs = os.path.join(self.ectl, 'pkgs')
-        elif os.path.exists(run):
+            return
+
+        # Look at an existing run
+        if os.path.exists(run):
             print('Getting config from run')
 
             # Determine directories from existing run
             self.runs = os.path.abspath(os.path.join(run, '..'))
 
             build = pathutil.follow_link(os.path.join(run, 'build'))
-            self.builds = os.path.abspath(os.path.join(build, '..'))
-            ectl_build = os.path.abspath(os.path.join(self.builds, '..'))
-
             pkg = pathutil.follow_link(os.path.join(run, 'pkg'))
-            self.pkgs = os.path.abspath(os.path.join(pkg, '..'))
-            ectl_pkg = os.path.abspath(os.path.join(self.pkgs, '..'))
 
-            if ectl_build == ectl_pkg:
-                self.ectl = ectl_build
-        elif rundeck is not None:
-            print('Getting config from rundeck')
+            if build is not None and pkg is not None:
+                self.builds = os.path.abspath(os.path.join(build, '..'))
+                ectl_build = os.path.abspath(os.path.join(self.builds, '..'))
 
-            # We're given a rundeck: search up for ectl.conf
-            start_path = os.path.split(os.path.abspath(run))[0]
+                self.pkgs = os.path.abspath(os.path.join(pkg, '..'))
+                ectl_pkg = os.path.abspath(os.path.join(self.pkgs, '..'))
 
-            # Find the root of the ectl tree
-            ectl_conf = pathutil.search_up(start_path,
-                lambda path: pathutil.has_file(path, 'ectl.conf'))
+                if ectl_build == ectl_pkg:
+                    self.ectl = ectl_build
+                return
 
-            if ectl_conf is None:
-                raise ValueError('Could not find ectl.conf starting from %s' % start_path)
+        # Last resort: search up from run directory
+        print('Getting config from run directory location')
 
-            self.ectl = os.path.split(ectl_conf)[0]
-            self.runs = os.path.join(self.ectl, 'runs')
-            self.builds = os.path.join(self.ectl, 'builds')
-            self.pkgs = os.path.join(self.ectl, 'pkgs')
+        # We're given a rundeck: search up for ectl.conf
+        start_path = os.path.split(os.path.abspath(run))[0]
+
+        # Find the root of the ectl tree
+        ectl_conf = pathutil.search_up(start_path,
+            lambda path: pathutil.has_file(path, 'ectl.conf'))
+
+        if ectl_conf is None:
+            raise ValueError('Could not find ectl.conf starting from %s' % start_path)
+
+        self.ectl = os.path.split(ectl_conf)[0]
+        self.runs = os.path.join(self.ectl, 'runs')
+        self.builds = os.path.join(self.ectl, 'builds')
+        self.pkgs = os.path.join(self.ectl, 'pkgs')

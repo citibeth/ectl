@@ -29,6 +29,10 @@ class FollowLinks(object):
         self.pkg = pathutil.follow_link(
             os.path.join(run, 'pkg'))
 
+        # Determine if pkgbuild was set before
+        self.pkgbuild = \
+            (self.pkg is not None) and \
+            (os.path.split(self.pkg)[1].find('-') >= 0)
 
 
 def write_I(preamble, sections, fname):

@@ -58,7 +58,7 @@ def search_up(path, condition_fn):
         path = new_path
 
 def follow_link(linkname, must_exist=False):
-    if not os.path.exists(linkname):
+    if not os.path.islink(linkname):
         return None
     fname = os.path.realpath(linkname)
     if must_exist and not os.path.exists(fname):

@@ -31,6 +31,8 @@ def setup_parser(subparser):
         help='[iso8601],[iso8601],[iso8601] (start, cold-end, end) Timespan to run it for')
     subparser.add_argument('--src', '-s', action='store', dest='src',
         help='Top-level directory of ModelE source')
+    subparser.add_argument('--pkgbuild', action='store_true', dest='pkgbuild', default=False,
+        help='Name package dir after build dir.')
 
 
 def parse_date(str):
@@ -141,6 +143,7 @@ def setup(parser, args, unknown_args):
     # ------ Read the rundeck and determine hashes
 
     # Load the system-provided rundeck
+    rd_name = os.path.split(os.path.split(rundeck)[1])[0]
     rd = ectl.rundeck.load(rundeck, modele_root=src)
 
     # (Read most updated version of the rundeck...)
@@ -182,11 +185,16 @@ def setup(parser, args, unknown_args):
 
 
     # Create flat0.R (original rundeck) if the file doesn't yet exist.
+    try:
+        os.makedirs(args.run)
+    except OSError:
+        pass
+
     fname = os.path.join(args.run, 'flat0.R')
     if not os.path.exists(fname):
         with open(fname, 'w') as out:
             for line in rd.legacy.lines:
-                out.write(line)
+                out.write(line.raw)
 
     # ------ Determine build; cannot change
     build_hash = buildhash(rd, src)
@@ -195,8 +203,12 @@ def setup(parser, args, unknown_args):
         raise ValueError('Cannot change build to %s', build)
 
     # ------ Determine pkg
-    pkg_hash = pkghash(rd, src)
-    pkg = os.path.join(config.pkgs, pkg_hash)
+    pkgbuild = args.pkgbuild or old.pkgbuild
+    if pkgbuild:
+        pkg = os.path.join(config.pkgs, 'pkg-' + os.path.split(build)[1])
+    else:
+        pkg_hash = pkghash(rd, src)
+        pkg = os.path.join(config.pkgs, pkg_hash)
 
     print('-------- New Setup:')
     print('    rundeck: %s' % rundeck)
@@ -205,7 +217,7 @@ def setup(parser, args, unknown_args):
     print('    pkg:     %s' % pkg)
 
     # ------ Re-build only if our pkg is not good
-    if not good_pkg_dir(pkg):
+    if pkgbuild or not good_pkg_dir(pkg):
         # number of jobs spack will to build with.
         jobs = multiprocessing.cpu_count()
 

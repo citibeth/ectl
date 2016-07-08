@@ -98,7 +98,9 @@ def launch(parser, args, unknown_args):
 
     # ------- Load the rundeck and rewrite the I file
     try:
-        rd = rundeck.load(os.path.join(run_dir, 'flat.R'))
+        rundeck_R = os.path.join(run_dir, 'rundeck', 'rundeck.R')
+        print('Reading {}'.format(rundeck_R))
+        rd = rundeck.load(rundeck_R)
 
         # Send end date
         if args.end is not None:
@@ -106,7 +108,9 @@ def launch(parser, args, unknown_args):
             rd.set(('INPUTZ_cold' if cold_restart else 'INPUTZ', 'END_TIME'), end)
 
         sections = rundeck.ParamSections(rd)
-        rundir.write_I(rd.preamble, sections, os.path.join(run_dir, 'I'))
+        Ifile = os.path.join(run_dir, 'I')
+        print('Writing {}'.format(Ifile))
+        rundir.write_I(rd.preamble, sections, Ifile)
 
     except IOError:
         print 'Warning: Cannot load flat.R.  NOT rewriting I file'

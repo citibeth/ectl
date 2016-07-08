@@ -21,7 +21,7 @@ class FollowLinks(object):
     def __init__(self, run):
         self.run = run
         self.rundeck = pathutil.follow_link(
-            os.path.join(run, 'rundeck.R'), must_exist=True)
+            os.path.join(run, 'upstream.R'), must_exist=True)
         self.src = pathutil.follow_link(
             os.path.join(run, 'src'), must_exist=True)
         self.build = pathutil.follow_link(

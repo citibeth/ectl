@@ -15,6 +15,7 @@ import re
 from ectl import iso8601
 import datetime
 import sys
+from spack.util import executable
 
 description = 'Setup a ModelE run.'
 
@@ -33,7 +34,8 @@ def setup_parser(subparser):
         help='Top-level directory of ModelE source')
     subparser.add_argument('--pkgbuild', action='store_true', dest='pkgbuild', default=False,
         help='Name package dir after build dir.')
-
+    subparser.add_argument('--rebuild', action='store_true', dest='rebuild', default=False,
+        help='Rebuild the package, even if it seems to be fine.')
 
 def parse_date(str):
     if len(str) == 0:
@@ -139,62 +141,80 @@ def setup(parser, args, unknown_args):
     if not os.path.isdir(src):
         raise ValueError('src %s does not exist!' % src)
 
+    # ===========================================
+    # Construct/merge the rundeck
+    git = executable.which('git')
 
-    # ------ Read the rundeck and determine hashes
+    # ----- Create the rundeck repo (if it doesn't already exist)
+    print('========= BEGIN Rundeck Management')
+    rundeck_dir = os.path.join(args.run, 'rundeck')
+    rundeck_R = os.path.join(rundeck_dir, 'rundeck.R')
+    if not os.path.exists(rundeck_dir):
+        # Create a new rundeck.R
+        try:
+            os.makedirs(rundeck_dir)
+        except OSError:
+            pass
+        os.chdir(rundeck_dir)
 
-    # Load the system-provided rundeck
-    rd_name = os.path.split(os.path.split(rundeck)[1])[0]
-    rd = ectl.rundeck.load(rundeck, modele_root=src)
+        git('init', echo=sys.stdout)
+        git('checkout', '-b', 'upstream', echo=sys.stdout)
 
-    # (Read most updated version of the rundeck...)
-    try:
-        # flat.R, as originally written from rundeck.R (not edited)
-        rdf0 = ectl.rundeck.load(os.path.join(args.run, 'flat0.R'), template_path=[])
-        # flat.R, possibly edited
-        rdf = ectl.rundeck.load(os.path.join(args.run, 'flat.R'), template_path=[])
+        # Copy the rundeck from original location (templates?)
+        print('$ <generating {}>'.format(rundeck_R))
+        with open(rundeck_R, 'w') as fout:
+            for line in legacy.preprocessor(rundeck, ectl.rundeck.default_template_path):
+                fout.write(line.raw)
 
-        # Merge anything changes in flat.R into the newly-read main rundeck.
-        print('----- Merging rundecks')
-        processed_keys = set()
-        for key,param in rdf.params.items():
-            processed_keys.add(key)
-            try:
-                param0 = rdf0.params[key]
-                # Key in rdf0 and rdf
-                # See if it's changed...
-                if (param0.value != param.value) and (key in rd.params):
-                    print('    {}: {} -> {}'.format(key, rd.params[key].value, param.value))
-                    rd.set(key, param.value, line=param.line)
-            except KeyError:
-                # Key in rdf but not rdf0
-                # Set in rundeck as well
-                    print('    {}: {}'.format(key, param.value))
-                    rd.set(key, param.value, line=param.line)
+        git('add', 'rundeck.R', echo=sys.stdout)
+        git('commit', '-a', '-m', 'Initial commit from {}'.format(rundeck), echo=sys.stdout)
 
-        # Mention keys that were in rdf0 and now on longer in rdf
-        for key0,param0 in rdf0.params.items():
-            if key0 in processed_keys:
-                continue
-            del rd.params[key0]
-            print('    {}: (REMOVED)'.format(key0))
+        # Put it on the user branch (where we normally will reside)
+        git('checkout', '-b', 'user', echo=sys.stdout)
 
-    except IOError as e:
-        print(e)
-        print('    Cannot read flat.R or flat0.R; not merging rundecks.')
-        pass
+    else:
+        # Update/merge the rundeck
+        # If there are unresolved conflicts, this will raise an exception
+
+        os.chdir(rundeck_dir)
+        try:
+            # Check in changes from user
+            git('checkout', 'user', echo=sys.stdout)    # Exception on the first command
+            git('commit', '-a', '-m', 'Changes from user', echo=sys.stdout, fail_on_error=False)
+
+            # Check in changes from upstream
+            git('checkout', 'upstream', echo=sys.stdout)
+            # Copy the rundeck from original location (templates?)
+            with open(rundeck_R, 'w') as fout:
+                for line in legacy.preprocessor(rundeck, ectl.rundeck.default_template_path):
+                    fout.write(line.raw)
+            git('commit', '-a', '-m', 'Changes from upstream', echo=sys.stdout, fail_on_error=False)
+
+            # Merge upstream changes into user
+            git('checkout', 'user', echo=sys.stdout)
+            git('merge', 'upstream', '-m', 'Merged changes', echo=sys.stdout)    # Will raise if merge needs help
+        except:
+            print('Error merging rundeck; do you have unresolved conflicts?')
+
+            if 'EDITOR' in os.environ:
+                EDITOR = os.environ['EDITOR'].split(' ')
+                print('EDITOR', EDITOR)
+                editor = executable.which(EDITOR[0])
+                args = EDITOR[1:] + [rundeck_R]
+                editor(*args, echo=sys.stdout)
+            else:
+                print('You need to edit the file to resolve conflicts:')
+                print(rundeck_R)
+            print('When you are done resolving conflicts, do:')
+            print('    ectl merge {}'.format(args.run))
+            print('    ectl setup {}'.format(args.run))
 
 
-    # Create flat0.R (original rundeck) if the file doesn't yet exist.
-    try:
-        os.makedirs(args.run)
-    except OSError:
-        pass
+            sys.exit(1)
+    print('========= END Rundeck Management')
 
-    fname = os.path.join(args.run, 'flat0.R')
-    if not os.path.exists(fname):
-        with open(fname, 'w') as out:
-            for line in rd.legacy.lines:
-                out.write(line.raw)
+    rd = ectl.rundeck.load(rundeck_R, modele_root=src)
+    # =====================================
 
     # ------ Determine build; cannot change
     build_hash = buildhash(rd, src)
@@ -216,8 +236,16 @@ def setup(parser, args, unknown_args):
     print('    build:   %s' % build)
     print('    pkg:     %s' % pkg)
 
+    # ------------- Set directory symlinks
+    set_link(rundeck, os.path.join(args.run, 'upstream.R'))
+    set_link(rundeck_R, os.path.join(args.run, 'rundeck.R'))
+    set_link(src, os.path.join(args.run, 'src'))
+    set_link(build, os.path.join(args.run, 'build'))
+    set_link(pkg, os.path.join(args.run, 'pkg'))
+
+
     # ------ Re-build only if our pkg is not good
-    if pkgbuild or not good_pkg_dir(pkg):
+    if args.rebuild or pkgbuild or (not good_pkg_dir(pkg)) or (old.pkg is None):
         # number of jobs spack will to build with.
         jobs = multiprocessing.cpu_count()
 
@@ -230,10 +258,6 @@ def setup(parser, args, unknown_args):
             '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
             src])
         subprocess.check_call(['make', 'install', '-j%d' % jobs])
-
-    # ---- Create args.run
-    if not os.path.isdir(args.run):
-        os.makedirs(args.run)
 
     # ------------------ Download input files
     
@@ -249,21 +273,3 @@ def setup(parser, args, unknown_args):
         rd.set(('INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
     rundir.make_rundir(rd, args.run)
 
-    # Write flat.R, the rundeck we are setting up
-    with open(os.path.join(args.run, 'flat.R'), 'w') as out:
-        rd.write(out)
-
-    # ---- Copy in original rundeck...
-#    rundeck_leafname = os.path.split(rundeck)[1]
-#    with open(os.path.join(args.run, 'flat.R'), 'w') as fout:
-#        fout.write(''.join(rd.raw_rundeck))
-#    flat0_fname = os.path.join(args.run, 'flat0.R')
-#    if not os.path.exists(flat0_fname):
-#        with open(flat0_fname, 'w') as fout:
-#            fout.write(''.join(rd.raw_rundeck))
-
-    # ------------- Set directory symlinks
-    set_link(rundeck, os.path.join(args.run, 'rundeck.R'))
-    set_link(src, os.path.join(args.run, 'src'))
-    set_link(build, os.path.join(args.run, 'build'))
-    set_link(pkg, os.path.join(args.run, 'pkg'))

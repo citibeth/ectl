@@ -31,5 +31,5 @@ def flatten(parser, args, unknown_args):
     template_path = [os.path.join(modele_root, 'templates')]
 
     with open(out_rundeck, 'w') as fout:
-        for lineno,line in legacy.preprocessor(in_rundeck, template_path):
-            fout.write(line)
+        for line in legacy.preprocessor(in_rundeck, template_path):
+            fout.write(line.raw)

@@ -20,7 +20,7 @@ description = 'Creates a flat rundeck file (eg: make rundeck)'
 
 def setup_parser(subparser):
     subparser.add_argument(
-        'rundir', help='Directory of run to give execution command')
+        'run', help='Directory of run to give execution command')
     subparser.add_argument('--restart', action='store_true', dest='restart', default=False,
         help="Restart the run, even if it's already started")
     subparser.add_argument('--end', '-e', action='store', dest='end',
@@ -76,14 +76,14 @@ def serial_launcher(cmd, fout, args):
 #sbatch --qos=debug -A s1001 -n %np -t %t 
 
 
-def launch(parser, args, unknown_args):
+def run(parser, args, unknown_args):
     if len(unknown_args) > 0:
         raise ValueError('Unkown arguments: %s' % unknown_args)
 
     # ------ Parse Arguments
-    run_dir = os.path.abspath(args.rundir) #rundir.resolve_fname(args.rundir)
-    cold_restart = args.restart or (rundir.status(run_dir) == rundir.INITIAL)
-    modelexe = os.path.join(run_dir, 'pkg', 'bin', 'modelexe')
+    paths = rundir.FollowLinks(args.run)
+    cold_restart = args.restart or (rundir.status(paths.run) == rundir.INITIAL)
+    modelexe = os.path.join(paths.run, 'pkg', 'bin', 'modelexe')
 
     module = sys.modules[__name__]
     launcher_fn = getattr(module, args.launcher + '_launcher')
@@ -94,13 +94,14 @@ def launch(parser, args, unknown_args):
         else:
             log_dir = os.path.abspath(ags.log_dir)
     else:
-        log_dir = os.path.join(run_dir, 'log')
+        log_dir = os.path.join(paths.run, 'log')
 
     # ------- Load the rundeck and rewrite the I file
     try:
-        rundeck_R = os.path.join(run_dir, 'rundeck', 'rundeck.R')
-        print('Reading {}'.format(rundeck_R))
-        rd = rundeck.load(rundeck_R)
+        rundeck_R = os.path.join(paths.run, 'rundeck', 'rundeck.R')
+        rd = rundeck.load(rundeck_R, modele_root=paths.src)
+        rd.resolve(file_path=ectl.rundeck.default_file_path, download=True,
+            download_dir=ectl.rundeck.default_file_path[0])
 
         # Send end date
         if args.end is not None:
@@ -108,9 +109,7 @@ def launch(parser, args, unknown_args):
             rd.set(('INPUTZ_cold' if cold_restart else 'INPUTZ', 'END_TIME'), end)
 
         sections = rundeck.ParamSections(rd)
-        Ifile = os.path.join(run_dir, 'I')
-        print('Writing {}'.format(Ifile))
-        rundir.write_I(rd.preamble, sections, Ifile)
+        rundir.make_rundir(rd, paths.run)
 
     except IOError:
         print 'Warning: Cannot load flat.R.  NOT rewriting I file'
@@ -128,7 +127,7 @@ def launch(parser, args, unknown_args):
             pass
         os.mkdir(log_dir)
 
-        log_main = os.path.join(run_dir,'log0')
+        log_main = os.path.join(paths.run,'log0')
         try:
             os.remove(log_main)
         except:
@@ -145,7 +144,7 @@ def launch(parser, args, unknown_args):
     modele_cmd.append('I')
 
     # ------- Open output file
-    os.chdir(run_dir)
+    os.chdir(paths.run)
 
     # ------- Run it!
     launcher_fn(mpi_cmd, modele_cmd, np=args.np)

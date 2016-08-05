@@ -435,16 +435,16 @@ class ParamSections(object):
         for param in sorted(list(rd.params.values())):
             pname = param.pname
             if isinstance(pname, str):    # Non-compound name
-                if (id(param.type) == id(ectl.rundeck.FILE)):
+                if (param.type == ectl.rundeck.FILE):
                     if param.rval is not None:
                         self.data_lines.append(" _file_{}='{}'".format(pname, param.rval))
                         self.data_files.append((pname, param.rval))
     #                else:
     #                    self.parameters.append("! Not Found: {}={}".format(pname, param.sval))
 
-                elif (id(param.type) == id(ectl.rundeck.GENERAL)):
+                elif (param.type == ectl.rundeck.GENERAL):
                     self.parameters.append(' %s=%s' % (param.pname, param.value))
-                elif (id(param.type) == id(ectl.rundeck.DATETIME)):
+                elif (param.type == ectl.rundeck.DATETIME):
                     raise ValueError('Cannot put DATETIME values into self.parameters section of rundeck.')
                 else:
                     raise ValueError('Unknown parameter type %s' % param.type)

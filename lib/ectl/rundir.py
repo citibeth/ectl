@@ -19,7 +19,7 @@ class FollowLinks(object):
     exist, or if the entire directory doesn't exist, sets to None."""
 
     def __init__(self, run):
-        self.run = run
+        self.run = os.path.abspath(run)
         self.rundeck = pathutil.follow_link(
             os.path.join(run, 'upstream.R'), must_exist=True)
         self.src = pathutil.follow_link(

@@ -10,7 +10,7 @@ from ectl.rundeck import legacy
 import subprocess
 import shutil
 
-description = 'Creates a flat rundeck file (eg: make rundeck)'
+description = 'Removes unused pkg and build directories.'
 
 def setup_parser(subparser):
     pass

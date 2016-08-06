@@ -37,6 +37,9 @@ def setup_parser(subparser):
     subparser.add_argument('--rebuild', action='store_true', dest='rebuild', default=False,
         help='Rebuild the package, even if it seems to be fine.')
 
+    subparser.add_argument('--jobs', '-j', action='store', dest='jobs',
+        help='Number of cores to use when building.')
+
 def parse_date(str):
     if len(str) == 0:
         return None
@@ -110,7 +113,7 @@ def setup(parser, args, unknown_args):
     # Get src, build and pkg directories the last time setup was run.
     # (None if they don't exist)
     old = rundir.FollowLinks(args.run)
-    status = rundir.status(args.run)
+    status = rundir.Status(args.run)
 
     print('\nRun: %s' % args.run)
     print('-------- Old Setup:')
@@ -119,14 +122,14 @@ def setup(parser, args, unknown_args):
     print('    src:     %s' % old.src)
     print('    build:   %s' % old.build)
     print('    pkg:     %s' % old.pkg)
-    print('    status:  %d' % status)
+    print('    status:  %d' % status.status)
 
     # ----- Determine the rundeck
     new_rundeck = os.path.abspath(args.rundeck) if args.rundeck is not None else None
     rundeck = new_rundeck or old.rundeck
     if rundeck is None:
         raise ValueError('No rundeck specified!')
-    if (status > rundir.INITIAL) and (old.rundeck is not None) and (rundeck != old.rundeck):
+    if (status.status > rundir.INITIAL) and (old.rundeck is not None) and (rundeck != old.rundeck):
         raise ValueError('Cannot change rundeck (to %s)' % (rundeck))
 #        tty.warn('Rundeck changing from %s to %s' % (old.rundeck, rundeck))
 
@@ -135,7 +138,7 @@ def setup(parser, args, unknown_args):
     src = new_src or old.src
     if src is None:
         raise ValueError('No source directory specified!')
-    if (status > rundir.INITIAL) and (old.src is not None) and (src != old.src):
+    if (status.status > rundir.INITIAL) and (old.src is not None) and (src != old.src):
         raise ValueError('Cannot change src (to %s)' % src)
 
     if not os.path.isdir(src):
@@ -219,7 +222,7 @@ def setup(parser, args, unknown_args):
     # ------ Determine build; cannot change
     build_hash = buildhash(rd, src)
     build = os.path.join(config.builds, build_hash)
-    if (status > rundir.INITIAL) and (old.build is not None) and (build != old.build):
+    if (status.status > rundir.INITIAL) and (old.build is not None) and (build != old.build):
         raise ValueError('Cannot change build to %s', build)
 
     # ------ Determine pkg
@@ -246,8 +249,11 @@ def setup(parser, args, unknown_args):
 
     # ------ Re-build only if our pkg is not good
     if args.rebuild or pkgbuild or (not good_pkg_dir(pkg)) or (old.pkg is None):
-        # number of jobs spack will to build with.
-        jobs = multiprocessing.cpu_count()
+        if args.jobs is None:
+            # number of jobs spack has to build with.
+            jobs = multiprocessing.cpu_count()
+        else:
+            jobs = int(args.jobs)
 
         # Create the build dir if it doesn't already exist
         if not os.path.isdir(build):

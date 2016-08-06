@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 
-description = 'Creates a flat rundeck file (eg: make rundeck)'
+description = 'Runs a user command in the environment set by a run.\nEnv vars ECTL_RUN, ECTL_RUNDECK, ECTL_SRC, ECTL_BUILD\nand ECTL_PKG get set.'
 
 def setup_parser(subparser):
     subparser.add_argument(

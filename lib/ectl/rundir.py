@@ -43,6 +43,39 @@ def detect_mpi(pkg):
     return 'openmpi'
 
 # --------------------------------------------------------------------
+notFoundRE = re.compile(r'.*?=>\s+not found.*')
+def check_ldd(exe_fname):
+    """Using ldd, checks that a binary can load."""
+
+    errors = list()
+
+    # Find all libraries that won't load
+    cmd = ['ldd', exe_fname]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    nstderr = 0
+    for line in proc.stderr:
+        sys.stderr.write(line)
+        nstderr += 1
+
+    if nstderr > 0:
+        sys.stderr.write('Problems loading: {}\n'.format(exe_fname))
+        raise EnvironmentError('Cannot load ELF binary, does it exist?')
+
+
+    for line in proc.stdout:
+        match = notFoundRE.match(line)
+        if match is not None:
+            errors.append(line)
+
+    # Print errors, if found
+    if len(errors) > 0:
+        sys.stderr.write('Problems loading: {}\n'.format(exe_fname))
+        for line in errors:
+            sys.stderr.write(line)
+        raise EnvironmentError('Cannot load ELF binary.  Have you loaded required environment modules?'.format(exe_fname))
+
+    return
+# --------------------------------------------------------------------
 psRE = re.compile(r'[^\s]+\s+([0-9]+)\s+.*')
 class MPILauncher(object):
     def __init__(self, run):
@@ -72,6 +105,7 @@ class MPILauncher(object):
             out.write('modele_cmd={}\n'.format(' '.join(modele_cmd)))
             out.write('cwd={}\n'.format(os.getcwd()))
 
+        check_ldd(modele_cmd[0])
         print(' '.join(mpi_cmd + modele_cmd))
 
         # See: http://stackoverflow.com/questions/29661527/how-to-spawn-detached-background-process-on-linux-in-either-bash-or-python
@@ -302,13 +336,16 @@ class Status(object):
         if self.launch is not None:
             # See if we're still running
             if self.launch['launcher'] == 'mpi':
-                with open(self.launch['pidfile'], 'r') as fin:
-                    pid = int(next(fin))
-                    try:
-                        os.kill(pid, 0)
-                        return RUNNING
-                    except OSError:
-                        pass
+                try:
+                    with open(self.launch['pidfile'], 'r') as fin:
+                        pid = int(next(fin))
+                        try:
+                            os.kill(pid, 0)
+                            return RUNNING
+                        except OSError:
+                            pass
+                except IOError:    # Cannot read modele.pid
+                    return STOPPED
 
         # First, check for any netCDF files.  If there are NO such files,
         # then we've never run.

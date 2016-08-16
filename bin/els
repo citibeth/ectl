@@ -1,0 +1,181 @@
+#!/usr/bin/env python
+#
+from __future__ import print_function
+
+# --------------------------------------------
+import sys
+if not sys.version_info[:2] >= (2,7):
+    v_info = sys.version_info[:3]
+    sys.exit("Ectl requires Python 2.7 or higher.  This is Python %d.%d.%d." % v_info)
+
+import os
+# Allow ectl libs to be imported in our scripts
+ECTL_FILE = os.path.realpath(os.path.expanduser(__file__))
+ECTL_PREFIX = os.path.dirname(os.path.dirname(ECTL_FILE))
+sys.path.insert(0, os.path.join(ECTL_PREFIX, "lib"))
+# --------------------------------------------
+
+import sys
+import re
+#import giss.modele
+import datetime
+import os.path
+import argparse
+import subprocess
+from ectl import gissdate
+import datetime
+import glob
+
+# -----------------------------------------------
+def multiglob_iterator(paths) :
+    """Iterator lists a bunch of files from a bunch of arguments.  Tries to work like ls
+    Yields:
+        (directory, filename) pairs
+    See:
+        lsacc.py
+    """
+    if len(paths) == 0 :
+        for fname in os.listdir('.') :
+            yield ('', fname)
+        return
+
+    for path in paths :
+        if os.path.isdir(path) :
+            for fname in os.listdir(path) :
+                yield (path, fname)
+
+        elif os.path.isfile(path) :
+            yield os.path.split(path)
+
+        else :
+            sub = glob.glob(path)
+            if len(sub) > 0:
+                for ret in multiglob_iterator(glob.glob(path)) :
+                    yield ret
+# ----------------------------------------------------------
+gissdateRE = re.compile(r'(.*?)(\d*)' + gissdate.monthRE_pat + r'(.*)')
+def accglob(file_iterator, date0=None, date1=None):
+    """file_iterator (see multiglob_iterator):
+        Iterator yielding (dir, filename) pairs
+    Produces an iterator yielding (keyname, dir, filename, date)
+        Where keyname is the 'corrected' filename using standard dates."""
+
+    for dir, fname in file_iterator:
+        match = gissdateRE.match(fname)
+        if match is None:
+            yield (fname, dir, fname, None)
+        else:
+
+            pre = match.group(1)
+            sday = match.group(2)
+            if len(sday) == 0:
+                day = 1
+            else:
+                day = int(sday)
+            month = gissdate.str_to_month(match.group(3))
+            year = int(match.group(4))
+            post = match.group(5)
+            keyname = '%s%s%04d%02d%02d' % (pre, post, year, month, day)
+#            print('key', keyname, fname, post)
+            date = datetime.date(year, month, day)
+            yield (keyname, dir, fname, date)
+
+            
+
+# -----------------------------------------------
+_monthnums = {
+    'JAN' : 1,'FEB' : 2,'MAR' : 3,'APR' : 4,'MAY' : 5,'JUN' : 6,
+    'JUL' : 7,'AUG' : 8,'SEP' : 9,'OCT' : 10,'NOV' : 11,'DEC' : 12}
+
+_monthRE0 = re.compile(r'(\d\d\d\d)(\d\d)')
+_monthRE1 = re.compile(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d\d\d\d)', re.IGNORECASE)
+
+def _parse_month(smonth) :
+    if smonth is None :
+        return None
+    if smonth == '' :
+        return None
+    match = _monthRE0.match(smonth)
+    if match is not None :
+        return datetime.date(int(match.group(1)), int(match.group(2)), 1)
+
+    match = _monthRE1.match(smonth)
+    if match is not None :
+        return datetime.date(int(match.group(2)),
+            _monthnums[match.group(1).upper()], 1)
+
+    raise Exception("Unknown month format, cannot parse '%s'" % smonth)
+# -----------------------------------------------
+def _add_month(dt, n) :
+    year = dt.year
+    month = dt.month + n
+    year += month / 12
+    month = month % 12
+    return datetime.date(year, month, 1)
+# -----------------------------------------------
+_month_rangeRE = re.compile(r'(.*?)-(.*?)|(.*?)')
+def _parse_month_range(smonths) :
+    if smonths is None :
+        return (None, None)
+    dash = smonths.find('-')
+    if dash < 0 :
+        dt0 = _parse_month(smonths)
+        dt1 = _add_month(dt0, 1)
+    else :
+        dt0 = _parse_month(smonths[:dash])
+        dt1 = _add_month(_parse_month(smonths[dash+1:]), 1)
+    return (dt0, dt1)    # Returns range EXCLUSIVE
+# --------------------------------------------
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-m', '--monthrange', type=str,
+    help='Month range to list acc files, inclusive ([m0][-][m1] where m0/m1 is yyyymm or MMMyyyy)')
+
+# ================= Parse the arguments
+args, unknown = parser.parse_known_args()
+
+# Check the date range
+(date0, date1) = _parse_month_range(args.monthrange)
+if date0 is not None and date1 is not None and date1 < date0 :
+    raise Exception("Ending month must be at least as big as starting month")
+
+# Separate paths to examine from flags to pass through to ls
+lsflags = []
+paths = []
+for arg in unknown :
+    if arg[0] == '-' :
+        lsflags.append(arg)
+    else :
+        paths.append(arg)
+
+# ==================== Get the list of files
+acc_files = accglob(
+    multiglob_iterator(paths),
+    date0=date0, date1=date1)
+
+# Grab out just the file names
+#fnames = [os.path.join(x[1], x[2]) for x in acc_files]
+fnames = [(os.path.join(x[1], x[0]), os.path.join(x[1], x[2])) for x in acc_files]
+fnames.sort()
+fnames = [x[1] for x in fnames]
+#print('---------------------------------')
+#print('\n'.join(fnames))
+#print('---------------------------------')
+
+# ==================== Output, either directly or through ls
+if len(fnames) == 0:
+    # No output, we have no files
+    sys.exit(0)
+#elif len(lsflags) == 0 :
+#    # Output ourselves (for use in command lines)
+#    print '\n'.join(fnames)
+#    sys.exit(0)
+#else :
+
+# Output via ls (for user inspection)
+cmd = ['ls', '-f', '--directory']    # -f prevents sorting in ls
+cmd.extend(lsflags)
+cmd.extend(fnames)
+# print cmd
+ret = subprocess.call(cmd)
+sys.exit(ret)

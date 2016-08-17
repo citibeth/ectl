@@ -75,7 +75,7 @@ def accglob(file_iterator, date0=None, date1=None):
             month = gissdate.str_to_month(match.group(3))
             year = int(match.group(4))
             post = match.group(5)
-            keyname = '%s%s%04d%02d%02d' % (pre, post, year, month, day)
+            keyname = '}}}%s%s%04d%02d%02d' % (pre, post, year, month, day)
 #            print('key', keyname, fname, post)
             date = datetime.date(year, month, day)
             yield (keyname, dir, fname, date)

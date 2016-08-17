@@ -7,7 +7,7 @@ class Config(object):
     """General configuration of where things are stored in this Ectl
     instance."""
 
-    def __init__(self, ectl=None, rundeck=None, run=None):
+    def __init__(self, ectl=None, run=None):
         self.ectl = None    # Root of ectl tree
         self.runs = None        # Where to create run directories, if needed
         self.builds = None      # Where to create build directories, if needed

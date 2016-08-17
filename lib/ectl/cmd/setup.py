@@ -76,7 +76,7 @@ def setup(parser, args, unknown_args):
 
     # ---------------
     # Get ectl directories
-    config = ectl.config.Config(rundeck=args.rundeck, run=args.run)
+    config = ectl.config.Config(run=args.run)
     print('-------- Ectl Config:')
     print('    ectl:   %s' % config.ectl)
     print('    runs:   %s' % config.runs)

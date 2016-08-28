@@ -18,7 +18,7 @@ class Config(object):
         if ectl is not None:
             print('Getting config from ectl')
             self.ectl = os.path.abspath(ectl)
-            self.runs = os.path.join(self.ectl, 'runs')
+            self.runs = os.path.join(self.ectl)
             self.builds = os.path.join(self.ectl, 'builds')
             self.pkgs = os.path.join(self.ectl, 'pkgs')
             return
@@ -58,6 +58,6 @@ class Config(object):
             raise ValueError('Could not find ectl.conf starting from %s' % start_path)
 
         self.ectl = os.path.split(ectl_conf)[0]
-        self.runs = os.path.join(self.ectl, 'runs')
+        self.runs = os.path.join(self.ectl)
         self.builds = os.path.join(self.ectl, 'builds')
         self.pkgs = os.path.join(self.ectl, 'pkgs')

@@ -82,19 +82,23 @@ def purge(parser, args, unknown_args):
     print('    builds: %s' % config.builds)
     print('    pkgs:   %s' % config.pkgs)
 
-
+    # Get all the runs in this 
+    runs = rundir.all_rundirs([config.runs], recursive=True)
+    #print('\n'.join(dir for dir,status in runs))
 
     # ------- Find used packages and builds
     used_pkgs = set()
     used_builds = set()
-    for run_dir in os.listdir(config.runs):
-        pkg_dir = follow_link(os.path.join(config.runs, run_dir, 'pkg'), must_exist=True)
+
+    for run_dir,_ in runs:
+        pkg_dir = follow_link(os.path.join(run_dir, 'pkg'), must_exist=True)
         if pkg_dir is not None:
             used_pkgs.add(os.path.split(pkg_dir)[1])
 
-        build_dir = follow_link(os.path.join(config.runs, run_dir, 'build'), must_exist=True)
+        build_dir = follow_link(os.path.join(run_dir, 'build'), must_exist=True)
         if build_dir is not None:
             used_builds.add(os.path.split(build_dir)[1])
+
 
 #    print('used_pkgs', used_pkgs)
 #    print('used_builds', used_builds)

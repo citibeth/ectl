@@ -28,15 +28,6 @@ def setup_parser(subparser):
         help='Recursively descend directories')
 
 
-def walk_rundirs(top, doruns):
-    status = ectl.rundir.Status(top)
-    if status.status == ectl.rundir.NONE:
-        for sub in os.listdir(top):
-            subdir = os.path.join(top, sub)
-            if os.path.isdir(subdir):
-                walk_rundirs(subdir, doruns)
-    else:
-        doruns.append((top,status))
 
 
 ## This require netCDF libraries in Python; but we want to be using
@@ -64,25 +55,8 @@ def ps(parser, args, unknown_args):
     if len(unknown_args) > 0:
         raise ValueError('Unkown arguments: %s' % unknown_args)
 
-    if len(args.runs) == 0:
-        runs = [os.path.abspath('.')]
-    else:
-        runs = [os.path.abspath(run) for run in args.runs]
-
     recursive = args.recursive
-    if (not recursive) and (len(runs) == 1):
-        # Auto-recurse if a single given dir is not a run dir
-        status = ectl.rundir.Status(runs[0])
-        if status.status == ectl.rundir.NONE:
-            recursive = True
-
-    # ------- Get list of runs to do
-    if recursive:
-        doruns = list()
-        for top_run in runs:
-            walk_rundirs(top_run, doruns)
-    else:
-        doruns = [(run, ectl.rundir.Status(run)) for run in runs]
+    doruns = rundir.all_rundirs(args.runs, recursive=args.recursive)
 
     for run,status in doruns:
         if (status.status == ectl.rundir.NONE):

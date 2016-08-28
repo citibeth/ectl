@@ -144,7 +144,12 @@ class MPILauncher(object):
 
     def ps(self, out):
         """Shows processes currently running."""
-        top_pid = self._top_pid()
+        try:
+            top_pid = self._top_pid()
+        except IOError:
+            out.write('<No Running Processes>\n')
+            return
+
         try:
             sub_pids = re.split('\s+', subprocess.check_output(['pgrep', '-P', str(top_pid)]))
 
@@ -366,3 +371,37 @@ class Status(object):
             return FINISHED
 
         return INITIAL
+# ---------------------------------------------------
+def walk_rundirs(top, doruns):
+    status = ectl.rundir.Status(top)
+    if status.status == ectl.rundir.NONE:
+        for sub in os.listdir(top):
+            subdir = os.path.join(top, sub)
+            if os.path.isdir(subdir):
+                walk_rundirs(subdir, doruns)
+    else:
+        doruns.append((top,status))
+
+def all_rundirs(runs, recursive=False):
+    """Used for `ectl ps` and `ectl purge`"""
+
+    if len(runs) == 0:
+        runs = [os.path.abspath('.')]
+    else:
+        runs = [os.path.abspath(run) for run in runs]
+
+    if (not recursive) and (len(runs) == 1):
+        # Auto-recurse if a single given dir is not a run dir
+        status = ectl.rundir.Status(runs[0])
+        if status.status == ectl.rundir.NONE:
+            recursive = True
+
+    # ------- Get list of runs to do
+    if recursive:
+        doruns = list()
+        for top_run in runs:
+            walk_rundirs(top_run, doruns)
+    else:
+        doruns = [(run, ectl.rundir.Status(run)) for run in runs]
+
+    return  doruns

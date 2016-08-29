@@ -6,7 +6,7 @@ import argparse
 import llnl.util.tty as tty
 import ectl
 import ectl.cmd
-from ectl import pathutil,rundeck,rundir,xhash
+from ectl import pathutil,rundeck,rundir,xhash,launchers
 from ectl.rundeck import legacy
 import re
 from ectl import iso8601
@@ -59,7 +59,7 @@ def ps(parser, args, unknown_args):
     doruns = rundir.all_rundirs(args.runs, recursive=args.recursive)
 
     for run,status in doruns:
-        if (status.status == ectl.rundir.NONE):
+        if (status.status == launchers.NONE):
             sys.stderr.write('Error: No valid run in directory %s\n' % run)
             sys.exit(-1)
 
@@ -98,5 +98,5 @@ def ps(parser, args, unknown_args):
         # Do launcher-specific stuff to look at the actual processes running.
         launcher = status.new_launcher()
         if launcher is not None:
-            launcher.ps(sys.stdout)
+            launcher.ps(status.launch_txt, sys.stdout)
 

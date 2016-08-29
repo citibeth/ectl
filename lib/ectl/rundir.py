@@ -8,7 +8,7 @@ import string
 import tempfile
 import filecmp
 import shutil
-from ectl import pathutil
+from ectl import pathutil, launchers
 import ectl.config
 import copy
 import subprocess
@@ -43,133 +43,6 @@ def detect_mpi(pkg):
     return 'openmpi'
 
 # --------------------------------------------------------------------
-notFoundRE = re.compile(r'.*?=>\s+not found.*')
-def check_ldd(exe_fname):
-    """Using ldd, checks that a binary can load."""
-
-    errors = list()
-
-    # Find all libraries that won't load
-    cmd = ['ldd', exe_fname]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    nstderr = 0
-    for line in proc.stderr:
-        sys.stderr.write(line)
-        nstderr += 1
-
-    if nstderr > 0:
-        sys.stderr.write('Problems loading: {}\n'.format(exe_fname))
-        raise EnvironmentError('Cannot load ELF binary, does it exist?')
-
-
-    for line in proc.stdout:
-        match = notFoundRE.match(line)
-        if match is not None:
-            errors.append(line)
-
-    # Print errors, if found
-    if len(errors) > 0:
-        sys.stderr.write('Problems loading: {}\n'.format(exe_fname))
-        for line in errors:
-            sys.stderr.write(line)
-        raise EnvironmentError('Cannot load ELF binary.  Have you loaded required environment modules?'.format(exe_fname))
-
-    return
-# --------------------------------------------------------------------
-psRE = re.compile(r'[^\s]+\s+([0-9]+)\s+.*')
-class MPILauncher(object):
-    def __init__(self, run):
-        self.run = os.path.abspath(run)
-
-    def __call__(self, mpi_cmd, modele_cmd, np=None, time=None):
-        """time:
-            Max time to run (ignored)"""
-        mpi_cmd = copy.copy(mpi_cmd)
-        os.chdir(self.run)
-
-        # --------- determine number of processors to use
-        np = int(np) if np is not None else detect_ncores()
-        mpi_cmd.extend(['-np', str(np)])
-
-        # --------- Write out our launch
-        modele_pid = os.path.join(self.run, 'modele.pid')
-        try:
-            os.remove(modele_pid)
-        except:
-            pass
-        mpi_cmd.extend(['--report-pid', modele_pid])
-        with open(os.path.join(self.run, 'launch.txt'), 'w') as out:
-            out.write('launcher=mpi\n')
-            out.write('pidfile={}\n'.format(modele_pid))
-            out.write('mpi_cmd={}\n'.format(' '.join(mpi_cmd)))
-            out.write('modele_cmd={}\n'.format(' '.join(modele_cmd)))
-            out.write('cwd={}\n'.format(os.getcwd()))
-
-        check_ldd(modele_cmd[0])
-        print(' '.join(mpi_cmd + modele_cmd))
-
-        # See: http://stackoverflow.com/questions/29661527/how-to-spawn-detached-background-process-on-linux-in-either-bash-or-python
-
-        # This works so easily because mpirun writes out its own PID
-        # file.  If mpirun did not, then we'd need to do more complex
-        # daemonization stuff.  For example:
-        #      https://github.com/thesharp/daemonize
-        cmd = ['nohup'] + mpi_cmd + modele_cmd
-        subprocess.Popen(cmd)
-
-    def wait(self, n=5):
-        """Waits till we think we're really running"""
-        modele_pid = os.path.join(self.run, 'modele.pid')
-        for i in range(0,n):
-            if os.path.exists(modele_pid):
-                return
-            time.sleep(1)
-        
-
-    def _top_pid(self):
-        """Returns PID of the top-level process (the mpirun)"""
-        with open(os.path.join(self.status.run, 'modele.pid'), 'r') as fin:
-            return int(next(fin))
-
-    def kill(self):
-        """Kills running jobs."""
-
-        # For now, we only know how to stop mpirun jobs
-        pid = self._top_pid()
-        try:
-            os.kill(pid, signal.SIGKILL) # SIGKILL=9
-            sys.stderr.write('Process %d successfully killed\n' % pid)
-        except OSError:
-            sys.stderr.write('Process %d seems to be already dead\n' % pid)
-
-    def ps(self, out):
-        """Shows processes currently running."""
-        try:
-            top_pid = self._top_pid()
-        except IOError:
-            out.write('<No Running Processes>\n')
-            return
-
-        try:
-            sub_pids = re.split('\s+', subprocess.check_output(['pgrep', '-P', str(top_pid)]))
-
-            pids = set([top_pid] + [int(x) for x in sub_pids if len(x) > 0])
-
-            cmd = ['ps', 'aux']
-            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-            out.write(next(proc.stdout))
-            for line in proc.stdout:
-                match = psRE.match(line)
-                if match is not None:
-                    pid = int(match.group(1))
-                    if pid in pids:
-                        out.write(line)
-#                print(match.group(1))
-#                print(line)
-#            out.write('sub-pids: {}\n'.format(pids))
-        except subprocess.CalledProcessError:
-            out.write('<No Running Processes>\n')
-
 
 # --------------------------------------------------------------------
 def new_launcher(run, slauncher):
@@ -182,10 +55,10 @@ def new_launcher(run, slauncher):
             profile = slauncher[6:]
         else:
             profile = None
-        launcher = SlurmLauncher(profile=profile)
+        launcher = launchers.SlurmLauncher(run, profile=profile)
 
     elif slauncher == 'mpi':
-        launcher = MPILauncher(run)
+        launcher = launchers.MPILauncher(run)
 
     else:
         raise ValueError('Unrecognized launcher: {}'.format(slauncher))
@@ -274,12 +147,6 @@ def make_rundir(rd, rundir):
     # Write them out to the I file
     write_I(rd.preamble, sections, os.path.join(rundir, 'I'))
 
-NONE=0
-INITIAL=1
-RUNNING=2
-STOPPED=3
-FINISHED=4
-_status_str = ['NONE', 'INITIAL', 'RUNNING', 'STOPPED', 'FINISHED']
 
 def read_launch_txt(run):
     """Reads the `key=value` entries of launch.txt into a dict."""
@@ -305,52 +172,49 @@ class Status(object):
         """Determines whether a run directory is:
             NONE: Run has not been set up yet
             INITIAL: Run not yet begun
+            QUEUED: Queued in a batch system but not yet running
             RUNNING: A process is actively running it
             STOPPED: In the middle of a run, but nothing running
             FINISHED: No more runs possible (rsf vs fort.1.nc?)."""
 
         self.run = run_dir
         self.launch_list = read_launch_txt(self.run)
-        self.launch = None if self.launch_list is None else dict(self.launch_list)
+        self.launch_txt = None if self.launch_list is None else dict(self.launch_list)
         self.status = self._get_status()
 
     @property
     def sstatus(self):
-        return _status_str[self.status]
+        return launchers._status_str[self.status]
 
     def new_launcher(self):
-        if self.launch is None:
+        if self.launch_txt is None:
+            return None
+        if 'launcher' not in self.launch_txt:
             return None
 
-        launcher = new_launcher(self.run, self.launch['launcher'])
+        launcher = new_launcher(self.run, self.launch_txt['launcher'])
         launcher.status = self
         return launcher
 
     def _get_status(self):
         # Make sure the run has been set up.
         if not os.path.exists(self.run):
-            return NONE
+            return launchers.NONE
         if not os.path.exists(os.path.join(self.run, 'I')):
-            return NONE
+            return launchers.NONE
 
         try:
             files = set(os.listdir(self.run))
         except:
-            return INITIAL    # The dir doesn't even exist!
+            return launchers.INITIAL    # The dir doesn't even exist!
 
-        if self.launch is not None:
-            # See if we're still running
-            if self.launch['launcher'] == 'mpi':
-                try:
-                    with open(self.launch['pidfile'], 'r') as fin:
-                        pid = int(next(fin))
-                        try:
-                            os.kill(pid, 0)
-                            return RUNNING
-                        except OSError:
-                            pass
-                except IOError:    # Cannot read modele.pid
-                    return STOPPED
+        status = None
+
+        launcher = self.new_launcher()
+        if launcher is not None:
+            status = launcher.get_status(self.launch_txt)
+            if status is not None:
+                return status
 
         # First, check for any netCDF files.  If there are NO such files,
         # then we've never run.
@@ -359,7 +223,7 @@ class Status(object):
         fort_files = ('fort.1.nc' in files) or ('fort.2.nc' in files)
 
         if fort_files:
-            return STOPPED
+            return launchers.STOPPED
 
         acc_files = False
         for file in files:
@@ -368,13 +232,13 @@ class Status(object):
                 break
 
         if acc_files:
-            return FINISHED
+            return launchers.FINISHED
 
-        return INITIAL
+        return launchers.INITIAL
 # ---------------------------------------------------
 def walk_rundirs(top, doruns):
     status = ectl.rundir.Status(top)
-    if status.status == ectl.rundir.NONE:
+    if status.status == launchers.NONE:
         for sub in os.listdir(top):
             subdir = os.path.join(top, sub)
             if os.path.isdir(subdir):
@@ -393,7 +257,7 @@ def all_rundirs(runs, recursive=False):
     if (not recursive) and (len(runs) == 1):
         # Auto-recurse if a single given dir is not a run dir
         status = ectl.rundir.Status(runs[0])
-        if status.status == ectl.rundir.NONE:
+        if status.status ==  launchers.NONE:
             recursive = True
 
     # ------- Get list of runs to do

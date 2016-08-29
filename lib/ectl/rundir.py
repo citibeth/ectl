@@ -45,16 +45,16 @@ def detect_mpi(pkg):
 # --------------------------------------------------------------------
 
 # --------------------------------------------------------------------
+slurmRE = re.compile('slurm(-(.+))?')
 def new_launcher(run, slauncher):
     """Launcher factory."""
 
     # Different kinds of Slurm profiles
-    if slauncher.find('slurm') == 0:
-        # Starts with 'slurm'...
-        if slauncher[5] == '-':
-            profile = slauncher[6:]
-        else:
-            profile = None
+    match = slurmRE.match(slauncher)
+    if match is not None:
+        profile = None
+        if match.group(2) is not None:
+            profile = match.group(2)
         launcher = launchers.SlurmLauncher(run, profile=profile)
 
     elif slauncher == 'mpi':

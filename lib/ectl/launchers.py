@@ -78,18 +78,25 @@ def parse_scontrol(scontrol_txt):
 # Convenient Slurm commands:
 # https://rc.fas.harvard.edu/resources/documentation/convenient-slurm-commands/
 
+legal_profiles = {None, 'debug'}
+
 submittedRE = re.compile(r'Submitted batch job\s+(\d+)\s*')
 invalidJobRE = re.compile(r'.*?Invalid job id specified.*')
 class SlurmLauncher(object):
 
     def __init__(self, run, profile=None):
         self.run = os.path.abspath(run)
+        if profile not in legal_profiles:
+            raise ValueError('Illegal profile for SlurmLauncher: {0}'.format(profile))
         self.profile = profile
 
     def __call__(self, mpi_cmd, modele_cmd, np=None, time=None):
 
         if np is None:
             raise ValueError('Must specify number of MPI tasks when using Slurm')
+        if time is None:
+            raise ValueError('Must specify length of time to run when using Slurm')
+
 
         mpi_cmd = copy.copy(mpi_cmd)
         os.chdir(self.run)
@@ -106,7 +113,7 @@ class SlurmLauncher(object):
             '--job-name={}'.format(self.run), 
             '--account=s1001',
             '--ntasks={}'.format(str(np)),
-            '--time={}'.format('1')]    # 1 minute
+            '--time={}'.format(time)]    # 1 minute
 
         if self.profile == 'debug':
             sbatch_cmd.append('--qos=debug')
@@ -123,7 +130,11 @@ class SlurmLauncher(object):
 
         # Write the launch file
         with open(os.path.join(self.run, 'launch.txt'), 'w') as out:
-            out.write('launcher=slurm-{}\n'.format(self.profile))
+            if self.profile is None:
+                slauncher = 'slurm'
+            else:
+                slauncher = 'slurm-{}'.format(self.profile)
+            out.write('launcher={}\n'.format(slauncher))
             out.write('jobid={}\n'.format(sjobid))
             out.write('mpi_cmd={}\n'.format(' '.join(mpi_cmd)))
             out.write('modele_cmd={}\n'.format(' '.join(modele_cmd)))

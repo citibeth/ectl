@@ -2,7 +2,7 @@ import copy
 import os
 import subprocess
 import re
-from ectl import pathutil,rundeck,rundir,xhash
+from ectl import pathutil,rundeck,rundir,xhash,launchers
 import sys
 import ectl
 import ectl.util
@@ -57,17 +57,17 @@ def run(args, cmd, verify_restart=False, rsf=None):
     # ------ Parse Arguments
     paths = rundir.FollowLinks(args.run)
     status = rundir.Status(paths.run)
-    if (status.status == rundir.NONE):
+    if (status.status == launchers.NONE):
         sys.stderr.write('Run does not exist, cannot run: {}\n'.format(args.run))
         sys.exit(-1)
-    if (status.status == rundir.RUNNING):
+    if (status.status == launchers.RUNNING):
         sys.stderr.write('Run is already running: {}\n'.format(args.run))
         sys.exit(-1)
 
-    cold_restart = (cmd == 'start') or (status.status == rundir.INITIAL)
+    cold_restart = (cmd == 'start') or (status.status == launchers.INITIAL)
 
     if cold_restart:    # Start a new run
-        if status.status >= rundir.STOPPED:
+        if status.status >= launchers.STOPPED:
             if not ectl.util.query_yes_no('Run is STOPPED; do you wish to overwrite and restart?', default='no'):
                 sys.exit(-1)
 
@@ -75,7 +75,7 @@ def run(args, cmd, verify_restart=False, rsf=None):
         if start_ts is not None:
             raise ValueError('Cannot set a start timestamp in the middle of a run!')
 
-        if status.status == rundir.FINISHED:
+        if status.status == launchers.FINISHED:
             sys.stderr.write('Run is finished, cannot continue: {}\n'.format(args.run))
             sys.exit(-1)
 
@@ -148,7 +148,7 @@ def print_status(run,status=None):
     if status is None:
         status = rundir.Status(run)
 
-    if (status.status == ectl.rundir.NONE):
+    if (status.status == launchers.NONE):
         sys.stderr.write('Error: No valid run in directory %s\n' % run)
         sys.exit(-1)
 
@@ -168,4 +168,4 @@ def print_status(run,status=None):
     # Do launcher-specific stuff to look at the actual processes running.
     launcher = status.new_launcher()
     if launcher is not None:
-        launcher.ps(sys.stdout)
+        launcher.ps(status.launch_txt, sys.stdout)

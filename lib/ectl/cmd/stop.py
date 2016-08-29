@@ -6,7 +6,7 @@ import argparse
 import llnl.util.tty as tty
 import ectl
 import ectl.cmd
-from ectl import pathutil,rundeck,rundir,xhash
+from ectl import pathutil,rundeck,rundir,xhash,launchers
 from ectl.rundeck import legacy
 import re
 from ectl import iso8601
@@ -35,21 +35,22 @@ def stop(parser, args, unknown_args):
     run = os.path.abspath(args.run)
 
     status = ectl.rundir.Status(run)
-    if (status.status == ectl.rundir.NONE):
+    if (status.status == launchers.NONE):
         sys.stderr.write('Error: No valid run in directory %s\n' % run)
         sys.exit(-1)
 
+    # Ask politely to stop
     with open(os.path.join(run, 'flagGoStop'), 'w') as fout:
         fout.write('__STOP__\n')
     sys.stderr.write('Asked to stop run: %s\n' % run)
 
 
-    # For now, we only know how to stop mpirun jobs
+    # Use system to stop it.
     if args.force:
         launcher = status.new_launcher()
-        launcher.kill()
+        launcher.kill(status.launch_txt)
 
     # Show what happened...
     status = ectl.rundir.Status(run)
     launcher = status.new_launcher()
-    launcher.ps(sys.stdout)
+    launcher.ps(status.launch_txt, sys.stdout)

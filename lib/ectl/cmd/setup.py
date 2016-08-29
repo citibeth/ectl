@@ -232,10 +232,30 @@ def setup(parser, args, unknown_args):
         if not os.path.isdir(build):
             os.makedirs(build)
         os.chdir(build)
-        subprocess.check_call([os.path.join(src, 'spconfig.py'),
-            '-DRUN=%s' % rundeck,
-            '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
-            src])
+
+        # Read the shebang out of setup.py to get around 80-char limit
+        spconfig_py = os.path.join(src, 'spconfig.py')
+        cmd = []
+        with open(spconfig_py, 'r') as fin:
+            line = next(fin)
+            if line[0:2] == '#!':
+                python = line[2:].strip()
+
+                # Make sure this looks like python, not something else
+                if python.index('python') != 0:
+                    cmd.append(python)
+
+        try:
+            cmd += [spconfig_py,
+                '-DRUN=%s' % rundeck,
+                '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
+                src]
+
+            subprocess.check_call(cmd)
+        except OSError as err:
+            sys.stderr.write(' '.join(cmd) + '\n')
+            sys.stderr.write('%s\n' % err)
+            raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'spconfig.py'))
         subprocess.check_call(['make', 'install', '-j%d' % jobs])
 
     # ------------------ Download input files

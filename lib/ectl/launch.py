@@ -19,14 +19,14 @@ def setup_parser(subparser):
 #        help='[iso8601] Time to stop the run')
 #    subparser.add_argument('-o', action='store', dest='log_dir',
 #        help="Name of file for output (relative to rundir); '-' means STDOUT")
-    subparser.add_argument('-l', '--launcher', action='store', dest='launcher', default='mpi',
+    subparser.add_argument('-l', '--launcher', action='store', dest='launcher',
         help='How to run the program')
 
     # -------- Arguments for SOME launchers
-    subparser.add_argument('-np', action='store', dest='np',
+    subparser.add_argument('-np', '--ntasks', '-n', action='store', dest='np',
         help='Number of MPI jobs')
-    subparser.add_argument('-t', action='store', dest='time',
-        help='Length of time to run')
+    subparser.add_argument('-t', '--time', action='store', dest='time',
+        help='Length of wall clock time to run (see sbatch): [mm|hh:mm:ss]')
 # --------------------------------------------------------------------
 def parse_date(str):
     if len(str) == 0:
@@ -55,6 +55,15 @@ def run(args, cmd, verify_restart=False, rsf=None):
             raise ValueError('Invalid timespan %s' % args.timespan)
 
     # ------ Parse Arguments
+
+    # Launcher to use
+    slauncher = args.launcher
+    if slauncher is None:
+        slauncher = os.environ.get('ECTL_LAUNCHER', None)
+    if slauncher is None:
+        raise ValueError('No launcher specified.  Please use --launcher command line option, or set the ECTL_LAUNCHER environment variable.  Valid values are mpi, slurm and slurm-debug.')
+
+
     paths = rundir.FollowLinks(args.run)
     status = rundir.Status(paths.run)
     if (status.status == launchers.NONE):
@@ -80,7 +89,7 @@ def run(args, cmd, verify_restart=False, rsf=None):
             sys.exit(-1)
 
     modelexe = os.path.join(paths.run, 'pkg', 'bin', 'modelexe')
-    launcher = rundir.new_launcher(paths.run, args.launcher)
+    launcher = rundir.new_launcher(paths.run, slauncher)
     log_dir = os.path.join(paths.run, 'log')
 
     # ------- Load the rundeck and rewrite the I file (and symlinks)

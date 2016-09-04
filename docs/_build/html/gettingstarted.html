@@ -1,0 +1,392 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>Getting Started &mdash; ModelE-Control 0.1 documentation</title>
+  
+
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  
+  
+    <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  
+
+  
+
+  
+    <link rel="top" title="ModelE-Control 0.1 documentation" href="index.html"/> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav" role="document">
+
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> ModelE-Control
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.1
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+                <ul>
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">Introduction</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" role="navigation" aria-label="top navigation">
+        <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+        <a href="index.html">ModelE-Control</a>
+      </nav>
+
+
+      
+      <div class="wy-nav-content">
+        <div class="rst-content">
+          
+
+ 
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+  <ul class="wy-breadcrumbs">
+    <li><a href="index.html">Docs</a> &raquo;</li>
+      
+    <li>Getting Started</li>
+      <li class="wy-breadcrumbs-aside">
+        
+          
+            <a href="_sources/gettingstarted.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+  </ul>
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="getting-started">
+<h1>Getting Started<a class="headerlink" href="#getting-started" title="Permalink to this headline">¶</a></h1>
+<p>A number of pieces of software must be installed to run ModelE
+successfully &#8212; not just ModelE and ModelE-Control, but also ModelE
+dependencies, as well as key post-processing tools.  These tools have
+already been installed on some systems, allowing users to get started
+immediately simply by making changes to <cite>.bashrc</cite>.</p>
+<p>Check below to see if the ModelE environment has been installed on
+your favorite computer.  If not, head to the
+full Installation instructions below.</p>
+<div class="section" id="quick-start-nccs-discover">
+<h2>Quick Start: NCCS Discover<a class="headerlink" href="#quick-start-nccs-discover" title="Permalink to this headline">¶</a></h2>
+<p>The ModelE environment has already been installed on NCCS Discover,
+allowing users to get started quickly with ModelE.  To use this
+environment:</p>
+<p>1. Remove all <code class="docutils literal"><span class="pre">module</span> <span class="pre">load</span></code> commands from your
+<code class="docutils literal"><span class="pre">.bashrc</span></code> file.</p>
+<ol class="arabic" start="2">
+<li><p class="first">Add the following to your <code class="docutils literal"><span class="pre">.bashrc</span></code> file:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">source</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">rpfische</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">modelex</span><span class="o">-</span><span class="n">gcc</span>
+</pre></div>
+</div>
+</li>
+</ol>
+<p>Use the following instead for Intel compilers (not yet implemented):</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">source</span> <span class="o">/</span><span class="n">home</span><span class="o">/</span><span class="n">rpfische</span><span class="o">/</span><span class="n">env</span><span class="o">/</span><span class="n">modelex</span><span class="o">-</span><span class="n">intel</span>
+</pre></div>
+</div>
+<ol class="arabic" start="3">
+<li><p class="first">Set <code class="docutils literal"><span class="pre">MODELE_FILE_PATH</span></code> in your <code class="docutils literal"><span class="pre">.bashrc</span></code>, modifying depending
+on where you wish to keep user-generated input files.</p>
+<blockquote>
+<div><p>export MODELE_FILE_PATH=/discover/nobackup/projects/giss/prod_input_files:$HOME/modele_input/local</p>
+</div></blockquote>
+</li>
+</ol>
+<p>That&#8217;s it, you are now ready to use ModelE, along with all the latest tools and full-featured dependencies (eg, NetCDF 4).</p>
+</div>
+<div class="section" id="installation">
+<h2>Installation<a class="headerlink" href="#installation" title="Permalink to this headline">¶</a></h2>
+<p>ModelE and ModelE-Control have a number of dependencies, which are
+automatically handled by <a class="reference external" href="http://github.com/llnl/spack">Spack</a>.  The following instructions may be
+used to install ModelE, <code class="docutils literal"><span class="pre">modele-control</span></code> and Spack startin from a
+clean machine:</p>
+<div class="section" id="install-spack">
+<h3>Install Spack<a class="headerlink" href="#install-spack" title="Permalink to this headline">¶</a></h3>
+<p>If you are not using <code class="docutils literal"><span class="pre">discover</span></code>, then here is how to build a
+ModelE environment on your machine.</p>
+<ol class="arabic">
+<li><p class="first">Download:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">cd</span> <span class="o">~</span>
+<span class="c1"># git clone git@github.com:citibeth/spack.git -b efischer/develop</span>
+<span class="n">git</span> <span class="n">clone</span> <span class="n">https</span><span class="p">:</span><span class="o">//</span><span class="n">github</span><span class="o">.</span><span class="n">com</span><span class="o">/</span><span class="n">citibeth</span><span class="o">/</span><span class="n">spack</span><span class="o">.</span><span class="n">git</span> <span class="o">-</span><span class="n">b</span> <span class="n">efischer</span><span class="o">/</span><span class="n">develop</span>
+</pre></div>
+</div>
+</li>
+<li><p class="first">Add to your <code class="docutils literal"><span class="pre">.bashrc</span></code> file:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>export SPACK_ROOT=$HOME/spack
+. $SPACK_ROOT/share/spack/setup-env.sh
+</pre></div>
+</div>
+</li>
+<li><p class="first">Remove non-system stuff from your <code class="docutils literal"><span class="pre">PATH</span></code>, <code class="docutils literal"><span class="pre">LD_LIBRARY_PATH</span></code> and
+other environment variables, which can cause strange errors when
+building with Spack.</p>
+</li>
+</ol>
+</div>
+<div class="section" id="setup-spack">
+<h3>Setup Spack<a class="headerlink" href="#setup-spack" title="Permalink to this headline">¶</a></h3>
+<p>See Spack docs for more info on setting up compilers, bootstrapping, etc.</p>
+<p>Actuallyxx... give instructions here on Intel, etc. compilers</p>
+</div>
+<div class="section" id="setup-packages">
+<h3>Setup Packages<a class="headerlink" href="#setup-packages" title="Permalink to this headline">¶</a></h3>
+<p>Copy the following to your <code class="docutils literal"><span class="pre">~/.spack/packages.yaml</span></code> file:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span><span class="n">packages</span><span class="p">:</span>
+    <span class="n">python</span><span class="p">:</span>
+        <span class="c1"># Lie about the version in the system, so it&#39;s new enough for Spack to recognize.</span>
+        <span class="n">paths</span><span class="p">:</span>
+            <span class="n">python</span><span class="nd">@2</span><span class="o">.</span><span class="mf">7.8</span><span class="p">:</span> <span class="o">/</span>        <span class="c1"># Spack can&#39;t install Python2, I don&#39;t know why</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="mf">3.5</span><span class="o">.</span><span class="mi">2</span><span class="p">,</span><span class="mf">2.7</span><span class="o">.</span><span class="mi">8</span><span class="p">]</span>
+
+    <span class="n">py</span><span class="o">-</span><span class="n">cython</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="mf">0.23</span><span class="o">.</span><span class="mi">5</span><span class="p">]</span>
+    <span class="n">py</span><span class="o">-</span><span class="n">proj</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.9</span><span class="o">.</span><span class="mf">5.1</span><span class="o">.</span><span class="mi">1</span><span class="p">]</span>    <span class="c1"># Normal released version 1.9.5.1 is buggy</span>
+    <span class="n">py</span><span class="o">-</span><span class="n">matplotlib</span><span class="p">:</span>
+        <span class="n">variants</span><span class="p">:</span> <span class="o">+</span><span class="n">gui</span> <span class="o">+</span><span class="n">ipython</span>
+    <span class="n">py</span><span class="o">-</span><span class="n">numpy</span><span class="p">:</span>
+        <span class="n">variants</span><span class="p">:</span> <span class="o">+</span><span class="n">blas</span> <span class="o">+</span><span class="n">lapack</span>
+
+    <span class="n">ibmisc</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="n">develop</span><span class="p">]</span>
+        <span class="n">variants</span><span class="p">:</span> <span class="o">+</span><span class="n">python</span> <span class="o">+</span><span class="n">netcdf</span>
+    <span class="n">icebin</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="n">develop</span><span class="p">]</span>
+        <span class="n">variants</span><span class="p">:</span> <span class="o">+</span><span class="n">gridgen</span> <span class="o">+</span><span class="n">python</span> <span class="o">~</span><span class="n">coupler</span> <span class="o">~</span><span class="n">pism</span>
+
+    <span class="c1"># Running without dynamic ice</span>
+    <span class="n">modele</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="n">landice</span><span class="p">]</span>
+
+<span class="c1">#    # Running with dynamic ice</span>
+<span class="c1">#    modele:</span>
+<span class="c1">#        version: [glint2]</span>
+<span class="c1">#        variants: [+couler +pism]</span>
+
+    <span class="n">pism</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="n">glint2</span><span class="p">]</span>
+    <span class="n">glint2</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="n">glint2</span><span class="p">]</span>
+        <span class="n">variants</span><span class="p">:</span> <span class="o">+</span><span class="n">coupler</span> <span class="o">+</span><span class="n">pism</span>
+
+    <span class="n">everytrace</span><span class="p">:</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="n">develop</span><span class="p">]</span>
+    <span class="n">eigen</span><span class="p">:</span>
+        <span class="n">variants</span><span class="p">:</span> <span class="o">~</span><span class="n">suitesparse</span>
+    <span class="n">netcdf</span><span class="p">:</span>
+        <span class="n">variants</span><span class="p">:</span> <span class="o">+</span><span class="n">mpi</span>
+
+
+    <span class="c1"># Recommended for security reasons</span>
+    <span class="c1"># Do not install OpenSSL as non-root user.</span>
+    <span class="n">openssl</span><span class="p">:</span>
+        <span class="n">paths</span><span class="p">:</span>
+            <span class="n">openssl</span><span class="nd">@system</span><span class="p">:</span> <span class="o">/</span><span class="n">usr</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="n">system</span><span class="p">]</span>
+        <span class="n">buildable</span><span class="p">:</span> <span class="kc">False</span>
+
+    <span class="c1"># Recommended, unless your system doesn&#39;t provide Qt4</span>
+    <span class="n">qt</span><span class="p">:</span>
+        <span class="n">paths</span><span class="p">:</span>
+            <span class="n">qt</span><span class="nd">@system</span><span class="p">:</span> <span class="o">/</span><span class="n">usr</span>
+        <span class="n">version</span><span class="p">:</span> <span class="p">[</span><span class="n">system</span><span class="p">]</span>
+        <span class="n">buildable</span><span class="p">:</span> <span class="kc">False</span>
+
+    <span class="nb">all</span><span class="p">:</span>
+        <span class="n">compiler</span><span class="p">:</span> <span class="p">[</span><span class="n">gcc</span><span class="nd">@4</span><span class="o">.</span><span class="mf">9.3</span><span class="p">]</span>
+        <span class="n">providers</span><span class="p">:</span>
+            <span class="n">mpi</span><span class="p">:</span> <span class="p">[</span><span class="n">openmpi</span><span class="p">]</span>
+            <span class="n">blas</span><span class="p">:</span> <span class="p">[</span><span class="n">openblas</span><span class="p">]</span>
+            <span class="n">lapack</span><span class="p">:</span> <span class="p">[</span><span class="n">openblas</span><span class="p">]</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="install-modele-environment">
+<h3>Install ModelE Environment<a class="headerlink" href="#install-modele-environment" title="Permalink to this headline">¶</a></h3>
+<p>This installs all the prerequisites needed to run ModelE, along with basic tools to analyze its output.</p>
+<div class="highlight-sh"><div class="highlight"><pre><span></span>spack install modele-utils
+spack install --dependencies-only modele
+spack install ncview
+spack install nco
+spack install modele-control
+</pre></div>
+</div>
+</div>
+<div class="section" id="generate-the-module-loads">
+<h3>Generate the Module Loads<a class="headerlink" href="#generate-the-module-loads" title="Permalink to this headline">¶</a></h3>
+<p>Run the following script, to generate the file <code class="docutils literal"><span class="pre">~/env/modele</span></code>.  This
+will load the modules you just created:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>#!/bin/sh
+#
+# Generate commands to load the Spack environment
+
+
+SPACKENV=$HOME/env/modele
+FIND=&#39;spack module loads&#39;
+
+echo &#39;#!/bin/sh -f&#39; &gt;$SPACKENV
+echo &#39;# ---- Machine generated; do not edit!&#39; &gt;&gt;$SPACKENV
+#echo &#39;module purge&#39; &gt;&gt;$SPACKENV
+
+# --- ModelE Stuff
+$FIND ncview &gt;&gt;$SPACKENV
+$FIND nco &gt;&gt;$SPACKENV
+$FIND modele-control &gt;&gt;$SPACKENV
+$FIND modele-utils &gt;&gt;$SPACKENV
+</pre></div>
+</div>
+<p><strong>NOTES</strong>:</p>
+<p>1. Remember to include any bootstrapping modules you might need as
+well: for example, pre-existing compilers sometimes must be loaded to
+run anything built with them.</p>
+<ol class="arabic simple" start="2">
+<li>Depending on how your system&#8217;s environment modules are configured, you might need to add <code class="docutils literal"><span class="pre">--prefix</span></code> to the <code class="docutils literal"><span class="pre">spack</span> <span class="pre">module</span> <span class="pre">loads</span></code> command.  See <code class="docutils literal"><span class="pre">spack</span> <span class="pre">module</span> <span class="pre">loads</span> <span class="pre">--help</span></code>.</li>
+</ol>
+</div>
+<div class="section" id="update-bashrc">
+<h3>Update <code class="docutils literal"><span class="pre">.bashrc</span></code><a class="headerlink" href="#update-bashrc" title="Permalink to this headline">¶</a></h3>
+<p>Add the following to your <code class="docutils literal"><span class="pre">.bashrc</span></code> file, modifying accordingly:</p>
+<div class="highlight-default"><div class="highlight"><pre><span></span>export SPACK_ROOT=$HOME/spack
+. $SPACK_ROOT/share/spack/setup-env.sh
+export MODULEPATH=$SPACK_ROOT/share/spack/modules:$MODULEPATH
+export PATH=$PATH:$HOME/spack/bin
+alias spack=&#39;nice spack&#39;
+export SPACK_DIRTY=
+export LESS=&#39;-R&#39;
+source $HOME/env/modele
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2016, Elizabeth Fischer.
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/snide/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    <script type="text/javascript">
+        var DOCUMENTATION_OPTIONS = {
+            URL_ROOT:'./',
+            VERSION:'0.1',
+            COLLAPSE_INDEX:false,
+            FILE_SUFFIX:'.html',
+            HAS_SOURCE:  true
+        };
+    </script>
+      <script type="text/javascript" src="_static/jquery.js"></script>
+      <script type="text/javascript" src="_static/underscore.js"></script>
+      <script type="text/javascript" src="_static/doctools.js"></script>
+
+  
+
+  
+  
+    <script type="text/javascript" src="_static/js/theme.js"></script>
+  
+
+  
+  
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.StickyNav.enable();
+      });
+  </script>
+   
+
+</body>
+</html>

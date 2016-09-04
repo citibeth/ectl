@@ -1,3 +1,8 @@
+.. ModelE-Control documentation master file, created by
+   sphinx-quickstart on Sun Sep  4 12:49:29 2016.
+   You can adapt this file completely to your liking, but it should at least
+   contain the root `toctree` directive.
+
 ModelE Control
 ================
 
@@ -17,10 +22,18 @@ climate model.  It offers the following feature:
   are only deleted when no longer used by any run.  Re-building ModelE
   can never accidentally "mess up" an existing in-progress ModelE run.
 
-Table of Contents
----------------------
+Contents:
 
 .. toctree::
    :maxdepth: 2
 
-    installation
+   introduction
+
+
+Indices and tables
+==================
+
+* :ref:`genindex`
+* :ref:`modindex`
+* :ref:`search`
+

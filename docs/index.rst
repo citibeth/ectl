@@ -28,6 +28,9 @@ Contents:
    :maxdepth: 2
 
    introduction
+   gettingstarted
+   running
+   advanced
 
 
 Indices and tables

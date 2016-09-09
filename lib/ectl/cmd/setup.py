@@ -5,7 +5,7 @@ import argparse
 import llnl.util.tty as tty
 import ectl
 import ectl.cmd
-from ectl import pathutil,rundir,xhash,srcdir
+from ectl import pathutil,rundir,xhash,srcdir,launchers
 import ectl.config
 import ectl.rundeck
 from ectl.rundeck import legacy
@@ -102,7 +102,7 @@ def setup(parser, args, unknown_args):
     rundeck = new_rundeck or old.rundeck
     if rundeck is None:
         raise ValueError('No rundeck specified!')
-    if (status.status > rundir.INITIAL) and (old.rundeck is not None) and (rundeck != old.rundeck):
+    if (status.status > launchers.INITIAL) and (old.rundeck is not None) and (rundeck != old.rundeck):
         raise ValueError('Cannot change rundeck (to %s)' % (rundeck))
 #        tty.warn('Rundeck changing from %s to %s' % (old.rundeck, rundeck))
 
@@ -111,7 +111,7 @@ def setup(parser, args, unknown_args):
     src = new_src or old.src
     if src is None:
         raise ValueError('No source directory specified!')
-    if (status.status > rundir.INITIAL) and (old.src is not None) and (src != old.src):
+    if (status.status > launchers.INITIAL) and (old.src is not None) and (src != old.src):
         raise ValueError('Cannot change src (to %s)' % src)
 
     if not os.path.isdir(src):
@@ -137,9 +137,12 @@ def setup(parser, args, unknown_args):
         git('checkout', '-b', 'upstream', echo=sys.stdout)
 
         # Copy the rundeck from original location (templates?)
+        modele_root = pathutil.modele_root(rundeck)
+        template_path = [os.path.join(modele_root, 'templates')]
+
         print('$ <generating {}>'.format(rundeck_R))
         with open(rundeck_R, 'w') as fout:
-            for line in legacy.preprocessor(rundeck, ectl.rundeck.default_template_path):
+            for line in legacy.preprocessor(rundeck, template_path):
                 fout.write(line.raw)
 
         git('add', 'rundeck.R', echo=sys.stdout)
@@ -195,7 +198,7 @@ def setup(parser, args, unknown_args):
     # ------ Determine build; cannot change
     build_hash = buildhash(rd, src)
     build = os.path.join(config.builds, build_hash)
-    if (status.status > rundir.INITIAL) and (old.build is not None) and (build != old.build):
+    if (status.status > launchers.INITIAL) and (old.build is not None) and (build != old.build):
         raise ValueError('Cannot change build to %s', build)
 
     # ------ Determine pkg

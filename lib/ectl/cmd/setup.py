@@ -15,6 +15,7 @@ import re
 import datetime
 import sys
 from spack.util import executable
+import pyar
 
 MODELE_CONTROL_PYAR = 'modele-control.pyar'
 description = 'Setup a ModelE run.'
@@ -126,6 +127,8 @@ def setup(parser, args, unknown_args):
     print('========= BEGIN Rundeck Management')
     rundeck_dir = os.path.join(args.run, 'rundeck')
     rundeck_R = os.path.join(rundeck_dir, 'rundeck.R')
+
+    template_path = [os.path.join(pathutil.modele_root(rundeck), 'templates')]
     if not os.path.exists(rundeck_dir):
         # Create a new rundeck.R
         try:
@@ -138,9 +141,6 @@ def setup(parser, args, unknown_args):
         git('checkout', '-b', 'upstream', echo=sys.stdout)
 
         # Copy the rundeck from original location (templates?)
-        modele_root = pathutil.modele_root(rundeck)
-        template_path = [os.path.join(modele_root, 'templates')]
-
         print('$ <generating {}>'.format(rundeck_R))
         with open(rundeck_R, 'w') as fout:
             for line in legacy.preprocessor(rundeck, template_path):
@@ -166,7 +166,7 @@ def setup(parser, args, unknown_args):
             git('checkout', 'upstream', echo=sys.stdout)
             # Copy the rundeck from original location (templates?)
             with open(rundeck_R, 'w') as fout:
-                for line in legacy.preprocessor(rundeck, ectl.rundeck.default_template_path):
+                for line in legacy.preprocessor(rundeck, template_path):
                     fout.write(line.raw)
             git('commit', '-a', '-m', 'Changes from upstream', echo=sys.stdout, fail_on_error=False)
 
@@ -226,57 +226,65 @@ def setup(parser, args, unknown_args):
 
     # ------ Re-build only if our pkg is not good
     if args.rebuild or pkgbuild or (not good_pkg_dir(pkg)) or (old.pkg is None):
-        # Unpack CMake build files if a modele-control.pyar file exists
-        # If any of these files needs to change, we expect the user to
-        # edit the pyar file.
-        os.chdir(src)
-        if os.exists(MODELE_CONTROL_PYAR):
-            with open(MODELE_CONTROL_PYAR) as fin:
-                pyar.unpack_archive(fin, '.')
-
-        if args.jobs is None:
-            # number of jobs spack has to build with.
-            jobs = multiprocessing.cpu_count()
-        else:
-            jobs = int(args.jobs)
-
-        # Create the build dir if it doesn't already exist
-        if not os.path.isdir(build):
-            os.makedirs(build)
-        os.chdir(build)
-
-        # Read the shebang out of setup.py to get around 80-char limit
-        spconfig_py = os.path.join(src, 'spconfig.py')
-        cmd = []
-        with open(spconfig_py, 'r') as fin:
-            line = next(fin)
-            if line[0:2] == '#!':
-                python = line[2:].strip()
-
-                # Make sure this looks like python, not something else
-                if python.index('python') != 0:
-                    cmd.append(python)
 
         try:
-            cmd += [spconfig_py,
-                '-DRUN=%s' % rundeck,
-                '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
-                src]
 
-            subprocess.check_call(cmd)
-        except OSError as err:
-            sys.stderr.write(' '.join(cmd) + '\n')
-            sys.stderr.write('%s\n' % err)
-            raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'spconfig.py'))
-        subprocess.check_call(['make', 'install', '-j%d' % jobs])
+            # Unpack CMake build files if a modele-control.pyar file exists
+            # If any of these files needs to change, we expect the user to
+            # edit the pyar file.
+            os.chdir(src)
+            if os.path.exists(MODELE_CONTROL_PYAR):
+                print('Adding files from modele-control.pyar')
+                with open(MODELE_CONTROL_PYAR) as fin:
+                    pyar.unpack_archive(fin, '.')
 
-        # Remove files from modele-control.pyar
-        os.chdir(src)
-        if os.exists(MODELE_CONTROL_PYAR):
-            with open(MODELE_CONTROL_PYAR) as fin:
-                for fname in pyar.list_archive(fin):
-                    print('Removing %s' % fname)
-                    os.remove(fname)
+            if args.jobs is None:
+                # number of jobs spack has to build with.
+                jobs = multiprocessing.cpu_count()
+            else:
+                jobs = int(args.jobs)
+
+            # Create the build dir if it doesn't already exist
+            if not os.path.isdir(build):
+                os.makedirs(build)
+            os.chdir(build)
+
+            # Read the shebang out of setup.py to get around 80-char limit
+            spconfig_py = os.path.join(src, 'spconfig.py')
+            cmd = []
+            with open(spconfig_py, 'r') as fin:
+                line = next(fin)
+                if line[0:2] == '#!':
+                    python = line[2:].strip()
+
+                    # Make sure this looks like python, not something else
+                    if python.index('python') != 0:
+                        cmd.append(python)
+
+            try:
+                cmd += [spconfig_py,
+                    '-DRUN=%s' % rundeck,
+                    '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
+                    src]
+
+                subprocess.check_call(cmd)
+            except OSError as err:
+                sys.stderr.write(' '.join(cmd) + '\n')
+                sys.stderr.write('%s\n' % err)
+                raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'spconfig.py'))
+            subprocess.check_call(['make', 'install', '-j%d' % jobs])
+        finally:
+            # Remove files from modele-control.pyar
+            os.chdir(src)
+            if os.path.exists(MODELE_CONTROL_PYAR):
+                print('Removing files from modele-control.pyar')
+                with open(MODELE_CONTROL_PYAR) as fin:
+                    for fname in pyar.list_archive(fin):
+                        # print('Removing %s' % fname)
+                        try:
+                            os.remove(fname)
+                        except OSError:
+                            pass
 
 
     # ------------------ Download input files

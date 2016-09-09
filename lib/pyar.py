@@ -51,7 +51,7 @@ def unpack_archive(fin, dest):
                     fname = os.path.join(dest, fname)
                     dir = os.path.split(fname)[0]
                     make_sure_path_exists(dir)
-                    print('writing ', fname)
+                    # print('writing ', fname)
                     fout = open(fname, 'w')
                     state = 1
                 else:

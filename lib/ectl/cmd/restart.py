@@ -26,7 +26,7 @@ def find_rsf(dir, dt):
             if (dt2 == dt):
                 return os.path.join(dir, file)
 
-    raise ValueError('No matchin rsf file for date {}'.format(dt))
+    raise ValueError('No matchin rsf file for date {0}'.format(dt))
 
 def restart(parser, args, unknown_args):
     if len(unknown_args) > 0:

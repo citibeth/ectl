@@ -95,9 +95,9 @@ class Param(object):
             if not isinstance(dt, datetime.datetime):
                 raise ValueError('Values of type DATETYPE must have Python type datetime.datetime')
             if (dt.minute!=0) or (dt.second !=0) or (dt.microsecond!=0):
-                raise ValueError('Values of type DATETYPE must be on the hour.  Error in: {}'.format(dt))
+                raise ValueError('Values of type DATETYPE must be on the hour.  Error in: {0}'.format(dt))
             if (dt.tzinfo is not None):
-                raise ValueError('Values of type DATETYPE cannot have a timezone.  Error in: {}'.format(dt))
+                raise ValueError('Values of type DATETYPE cannot have a timezone.  Error in: {0}'.format(dt))
 
     @property
     def line(self):
@@ -194,7 +194,7 @@ class Params(dict):
                         print(e2)
                         raise
                     except Exception as e2:
-                        sys.stderr.write('{}: {}\n'.format(param.pname, e2))
+                        sys.stderr.write('{0}: {1}\n'.format(param.pname, e2))
                         good = False
 
                     ret = False    # Error condition
@@ -437,10 +437,10 @@ class ParamSections(object):
             if isinstance(pname, str):    # Non-compound name
                 if (param.type == ectl.rundeck.FILE):
                     if param.rval is not None:
-                        self.data_lines.append(" _file_{}='{}'".format(pname, param.rval))
+                        self.data_lines.append(" _file_{0}='{1}'".format(pname, param.rval))
                         self.data_files.append((pname, param.rval))
     #                else:
-    #                    self.parameters.append("! Not Found: {}={}".format(pname, param.sval))
+    #                    self.parameters.append("! Not Found: {0}={1}".format(pname, param.sval))
 
                 elif (param.type == ectl.rundeck.GENERAL):
                     self.parameters.append(' %s=%s' % (param.pname, param.value))
@@ -454,14 +454,14 @@ class ParamSections(object):
                 elif pname[0].lower() == 'inputz_cold':
                     iz = self.inputz_cold
                 else:
-                    raise ValueError('Unknown compound name: {}'.format(pname))
+                    raise ValueError('Unknown compound name: {0}'.format(pname))
 
                 if pname[1].upper() == 'END_TIME':
                     iz.append(namelist_time('E', param.value))
                 elif pname[1].upper() == 'START_TIME':
                     iz.append(namelist_time('I', param.value))
                 else:
-                    line = '{}={},'.format(pname[1],param.value)
+                    line = '{0}={1},'.format(pname[1],param.value)
                     iz.append(line)
 
 

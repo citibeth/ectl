@@ -64,8 +64,8 @@ def ps(parser, args, unknown_args):
             sys.exit(-1)
 
         # Top-line status
-        print('============================ {}'.format(os.path.split(run)[1]))
-        print('status:  {}'.format(status.sstatus))
+        print('============================ {0}'.format(os.path.split(run)[1]))
+        print('status:  {0}'.format(status.sstatus))
 
         paths = rundir.FollowLinks(run)
 
@@ -84,7 +84,7 @@ def ps(parser, args, unknown_args):
         dates.sort()
         for dt,fname in dates:
             if dt is not None:
-                print('{}: {}'.format(fname, dt))
+                print('{0}: {1}'.format(fname, dt))
 
         # Run configuration
         paths.dump()
@@ -92,7 +92,7 @@ def ps(parser, args, unknown_args):
         # Launch.txt
         if status.launch_list is not None:
             for key,val in status.launch_list:
-                print('{} = {}'.format(key, val))
+                print('{0} = {1}'.format(key, val))
 
 
         # Do launcher-specific stuff to look at the actual processes running.

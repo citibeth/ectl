@@ -16,6 +16,7 @@ import datetime
 import sys
 from spack.util import executable
 
+MODELE_CONTROL_PYAR = 'modele-control.pyar'
 description = 'Setup a ModelE run.'
 
 def setup_parser(subparser):
@@ -225,6 +226,14 @@ def setup(parser, args, unknown_args):
 
     # ------ Re-build only if our pkg is not good
     if args.rebuild or pkgbuild or (not good_pkg_dir(pkg)) or (old.pkg is None):
+        # Unpack CMake build files if a modele-control.pyar file exists
+        # If any of these files needs to change, we expect the user to
+        # edit the pyar file.
+        os.chdir(src)
+        if os.exists(MODELE_CONTROL_PYAR):
+            with open(MODELE_CONTROL_PYAR) as fin:
+                pyar.unpack_archive(fin, '.')
+
         if args.jobs is None:
             # number of jobs spack has to build with.
             jobs = multiprocessing.cpu_count()
@@ -260,6 +269,15 @@ def setup(parser, args, unknown_args):
             sys.stderr.write('%s\n' % err)
             raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'spconfig.py'))
         subprocess.check_call(['make', 'install', '-j%d' % jobs])
+
+        # Remove files from modele-control.pyar
+        os.chdir(src)
+        if os.exists(MODELE_CONTROL_PYAR):
+            with open(MODELE_CONTROL_PYAR) as fin:
+                for fname in pyar.list_archive(fin):
+                    print('Removing %s' % fname)
+                    os.remove(fname)
+
 
     # ------------------ Download input files
     

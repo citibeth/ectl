@@ -141,13 +141,13 @@ def setup(parser, args, unknown_args):
         git('checkout', '-b', 'upstream', echo=sys.stdout)
 
         # Copy the rundeck from original location (templates?)
-        print('$ <generating {}>'.format(rundeck_R))
+        print('$ <generating {0}>'.format(rundeck_R))
         with open(rundeck_R, 'w') as fout:
             for line in legacy.preprocessor(rundeck, template_path):
                 fout.write(line.raw)
 
         git('add', 'rundeck.R', echo=sys.stdout)
-        git('commit', '-a', '-m', 'Initial commit from {}'.format(rundeck), echo=sys.stdout)
+        git('commit', '-a', '-m', 'Initial commit from {0}'.format(rundeck), echo=sys.stdout)
 
         # Put it on the user branch (where we normally will reside)
         git('checkout', '-b', 'user', echo=sys.stdout)
@@ -186,8 +186,8 @@ def setup(parser, args, unknown_args):
                 print('You need to edit the file to resolve conflicts:')
                 print(rundeck_R)
             print('When you are done resolving conflicts, do:')
-            print('    ectl merge {}'.format(args.run))
-            print('    ectl setup {}'.format(args.run))
+            print('    ectl merge {0}'.format(args.run))
+            print('    ectl setup {0}'.format(args.run))
 
 
             sys.exit(1)

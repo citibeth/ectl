@@ -67,10 +67,10 @@ def run(args, cmd, verify_restart=False, rsf=None):
     paths = rundir.FollowLinks(args.run)
     status = rundir.Status(paths.run)
     if (status.status == launchers.NONE):
-        sys.stderr.write('Run does not exist, cannot run: {}\n'.format(args.run))
+        sys.stderr.write('Run does not exist, cannot run: {0}\n'.format(args.run))
         sys.exit(-1)
     if (status.status == launchers.RUNNING):
-        sys.stderr.write('Run is already running: {}\n'.format(args.run))
+        sys.stderr.write('Run is already running: {0}\n'.format(args.run))
         sys.exit(-1)
 
     cold_restart = (cmd == 'start') or (status.status == launchers.INITIAL)
@@ -85,7 +85,7 @@ def run(args, cmd, verify_restart=False, rsf=None):
             raise ValueError('Cannot set a start timestamp in the middle of a run!')
 
         if status.status == launchers.FINISHED:
-            sys.stderr.write('Run is finished, cannot continue: {}\n'.format(args.run))
+            sys.stderr.write('Run is finished, cannot continue: {0}\n'.format(args.run))
             sys.exit(-1)
 
     modelexe = os.path.join(paths.run, 'pkg', 'bin', 'modelexe')
@@ -162,8 +162,8 @@ def print_status(run,status=None):
         sys.exit(-1)
 
     # Top-line status
-    print('============================ {}'.format(os.path.split(run)[1]))
-    print('status:  {}'.format(status.sstatus))
+    print('============================ {0}'.format(os.path.split(run)[1]))
+    print('status:  {0}'.format(status.sstatus))
 
     # Run configuration
     paths = rundir.FollowLinks(run)
@@ -172,7 +172,7 @@ def print_status(run,status=None):
     # Launch.txt
     if status.launch_list is not None:
         for key,val in status.launch_list:
-            print('{} = {}'.format(key, val))
+            print('{0} = {1}'.format(key, val))
 
     # Do launcher-specific stuff to look at the actual processes running.
     launcher = status.new_launcher()

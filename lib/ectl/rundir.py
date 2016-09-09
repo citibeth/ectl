@@ -61,7 +61,7 @@ def new_launcher(run, slauncher):
         launcher = launchers.MPILauncher(run)
 
     else:
-        raise ValueError('Unrecognized launcher: {}'.format(slauncher))
+        raise ValueError('Unrecognized launcher: {0}'.format(slauncher))
 
     return launcher
 #    launcher = getattr(sys.modules[__name__], 'Launcher_' + args.launcher)()

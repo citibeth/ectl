@@ -163,7 +163,7 @@ class ComponentOptions(Parser):
                 if len(opt) == 0: continue
                 words = opt.split('=')
                 if len(words) != 2:
-                    raise ValueError('Bad component option {}'.format(opt))
+                    raise ValueError('Bad component option {0}'.format(opt))
                 parsed_options.append((words[0].strip(), words[1].strip()))
 
             return component, parsed_options

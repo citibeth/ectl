@@ -40,7 +40,7 @@ def check_ldd(exe_fname):
         nstderr += 1
 
     if nstderr > 0:
-        sys.stderr.write('Problems loading: {}\n'.format(exe_fname))
+        sys.stderr.write('Problems loading: {0}\n'.format(exe_fname))
         raise EnvironmentError('Cannot load ELF binary, does it exist?')
 
 
@@ -51,7 +51,7 @@ def check_ldd(exe_fname):
 
     # Print errors, if found
     if len(errors) > 0:
-        sys.stderr.write('Problems loading: {}\n'.format(exe_fname))
+        sys.stderr.write('Problems loading: {0}\n'.format(exe_fname))
         for line in errors:
             sys.stderr.write(line)
         raise EnvironmentError('Cannot load ELF binary.  Have you loaded required environment modules?'.format(exe_fname))
@@ -110,10 +110,10 @@ class SlurmLauncher(object):
         cmd_str = ' '.join(mpi_cmd + modele_cmd)
         print(cmd_str)
         sbatch_cmd = ['sbatch',
-            '--job-name={}'.format(self.run), 
+            '--job-name={0}'.format(self.run), 
             '--account=s1001',
-            '--ntasks={}'.format(str(np)),
-            '--time={}'.format(time)]    # 1 minute
+            '--ntasks={0}'.format(str(np)),
+            '--time={0}'.format(time)]    # 1 minute
 
         if self.profile == 'debug':
             sbatch_cmd.append('--qos=debug')
@@ -133,12 +133,12 @@ class SlurmLauncher(object):
             if self.profile is None:
                 slauncher = 'slurm'
             else:
-                slauncher = 'slurm-{}'.format(self.profile)
-            out.write('launcher={}\n'.format(slauncher))
-            out.write('jobid={}\n'.format(sjobid))
-            out.write('mpi_cmd={}\n'.format(' '.join(mpi_cmd)))
-            out.write('modele_cmd={}\n'.format(' '.join(modele_cmd)))
-            out.write('cwd={}\n'.format(os.getcwd()))
+                slauncher = 'slurm-{0}'.format(self.profile)
+            out.write('launcher={0}\n'.format(slauncher))
+            out.write('jobid={0}\n'.format(sjobid))
+            out.write('mpi_cmd={0}\n'.format(' '.join(mpi_cmd)))
+            out.write('modele_cmd={0}\n'.format(' '.join(modele_cmd)))
+            out.write('cwd={0}\n'.format(os.getcwd()))
 
     def get_status(self, launch_txt):
         cmd = ['scontrol', 'show', 'jobid', '-dd', launch_txt['jobid']]
@@ -192,10 +192,10 @@ class MPILauncher(object):
         mpi_cmd.extend(['--report-pid', modele_pid])
         with open(os.path.join(self.run, 'launch.txt'), 'w') as out:
             out.write('launcher=mpi\n')
-            out.write('pidfile={}\n'.format(modele_pid))
-            out.write('mpi_cmd={}\n'.format(' '.join(mpi_cmd)))
-            out.write('modele_cmd={}\n'.format(' '.join(modele_cmd)))
-            out.write('cwd={}\n'.format(os.getcwd()))
+            out.write('pidfile={0}\n'.format(modele_pid))
+            out.write('mpi_cmd={0}\n'.format(' '.join(mpi_cmd)))
+            out.write('modele_cmd={0}\n'.format(' '.join(modele_cmd)))
+            out.write('cwd={0}\n'.format(os.getcwd()))
 
         check_ldd(modele_cmd[0])
         print(' '.join(mpi_cmd + modele_cmd))
@@ -270,7 +270,7 @@ class MPILauncher(object):
                         out.write(line)
 #                print(match.group(1))
 #                print(line)
-#            out.write('sub-pids: {}\n'.format(pids))
+#            out.write('sub-pids: {0}\n'.format(pids))
         except subprocess.CalledProcessError:
             out.write('<No Running Processes>\n')
 

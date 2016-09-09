@@ -153,7 +153,7 @@ class Executable(object):
         tty.debug(cmd_line)
         if (echo is not None):
             leaf = os.path.split(cmd[0])[1]
-            echo.write('$ {} '.format(leaf))
+            echo.write('$ {0} '.format(leaf))
             echo.write(' '.join(cmd[1:]))
             echo.write('\n')
 

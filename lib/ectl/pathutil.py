@@ -12,7 +12,7 @@ def search_file(filename, search_path):
         fname = os.path.abspath(os.path.join(path, filename))
         if os.path.exists(fname):
             return fname
-    raise IOError('File not found in search path: {}'.format(filename))
+    raise IOError('File not found in search path: {0}'.format(filename))
 
 
 def is_modele_root(dir):

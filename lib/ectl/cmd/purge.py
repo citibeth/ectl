@@ -49,7 +49,7 @@ def inactivate_unused(pkgs_dir, used_pkgs):
 
         version = 0
         while True:
-            new_leaf = 'rm-{}-{}-{}'.format(stoday, version, pkg)
+            new_leaf = 'rm-{0}-{1}-{2}'.format(stoday, version, pkg)
             new_name = os.path.join(pkgs_dir, new_leaf)
             if not os.path.exists(new_name):
                 break
@@ -114,14 +114,14 @@ def purge(parser, args, unknown_args):
     # ------- Inactivate unused and delete older inactivated packages...
     pkgs_dir = os.path.join(config.ectl, 'pkgs')
     n = inactivate_unused(pkgs_dir, used_pkgs)
-    print('Renamed {} packages, {} remain active'.format(n, len(used_pkgs)))
+    print('Renamed {0} packages, {1} remain active'.format(n, len(used_pkgs)))
     n = delete_inactive(pkgs_dir, cutoff)
-    print('Deleted {} packages inactivated before {}'.format(n, scutoff))
+    print('Deleted {0} packages inactivated before {1}'.format(n, scutoff))
 
     builds_dir = os.path.join(config.ectl, 'builds')
     n = inactivate_unused(builds_dir, used_builds)
-    print('Renamed {} builds, {} remain active'.format(n, len(used_builds)))
+    print('Renamed {0} builds, {1} remain active'.format(n, len(used_builds)))
     n = delete_inactive(builds_dir, cutoff)
-    print('Deleted {} builds inactivated before {}'.format(n, scutoff))
+    print('Deleted {0} builds inactivated before {1}'.format(n, scutoff))
 
 

@@ -35,7 +35,8 @@ Use the following instead for Intel compilers (not yet implemented)::
 
     export MODELE_FILE_PATH=/discover/nobackup/projects/giss/prod_input_files:$HOME/modele_input/local
 
-That's it, you are now ready to use ModelE, along with all the latest tools and full-featured dependencies (eg, NetCDF 4).
+That's it, you are now ready to use ModelE, along with all the latest
+tools, NetCDF, etc.
 
 
 Installation

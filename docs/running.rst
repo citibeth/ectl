@@ -2,124 +2,132 @@ Build and Run ModelE
 =============================
 
 Now that the ModelE environment has been installed, it is possible to
-begin downloading and running climate models.  This section serves as a tutorial, not reference manual.  Definitive usage for any ModelE-Control command may be obtained via ``ectl <cmd> --help``.  For example::
+begin downloading and running climate models.  This section serves as a tutorial, not reference manual.  Definitive usage for any ModelE-Control command may be obtained via ``ectl <cmd> --help``.  For example:
 
-    $ ectl setup help
-    usage: ectl setup [-h] [--ectl ECTL] [--rundeck RUNDECK] [--src SRC]
-                      [--pkgbuild] [--rebuild] [--jobs JOBS]
-                      run
+.. code-block:: control
 
-    positional arguments:
-      run                   Directory of run to setup
+   $ ectl setup help
+   usage: ectl setup [-h] [--ectl ECTL] [--rundeck RUNDECK] [--src SRC]
+                     [--pkgbuild] [--rebuild] [--jobs JOBS]
+                     run
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      --ectl ECTL           Root of ectl tree: ectl/runs, ectl/builds, ectl/pkgs
-      --rundeck RUNDECK, -rd RUNDECK
-                            Rundeck to use in setup
-      --src SRC, -s SRC     Top-level directory of ModelE source
-      --pkgbuild            Name package dir after build dir.
-      --rebuild             Rebuild the package, even if it seems to be fine.
-      --jobs JOBS, -j JOBS  Number of cores to use when building.
+   positional arguments:
+     run                   Directory of run to setup
 
-
-Setup Experiment Directory
------------------------------------
-
-When ModelE-Control builds ModelE and produces executable binaries, it
-must know where to put these directories.  This is currently
-configured by creating a no-content file called ``ectl.conf``; for example, by::
-
-    echo >ectl.conf
-
-We call the directory in which ``ectl.conf`` is located the
-*ModelE-Control root directory*.  Run directories must be located
-within this root, although there is nothing preventing users from
-creating more than one root directory.  ModelE-Control automatically
-identifies the proper root for a run directory by searching up the
-directory tree for the ``ectl.conf`` file.
-
-We recommend users consider the following ways to organize ModelE runs
-and roots:
-
-One Root per Experiment
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-Imagine the user creates a top-level "experiment" directory,
-which will eventually contain all files related to a particular
-experiment: ModelE run directories, specialized input files,
-post-processing / analysis code, maybe even papers related to an
-experiment.  The experiment will probably require more than one run of
-ModelE, hence it will have more than one run directory.  Users might
-also choose to include a ModelE source directory inside an experiment;
-this is not always necessary, as long as one has the git has of the
-source code (which ModelE does).
-
-It is natural to create one root for each experiment directory; this
-is done by creating ``ectl.conf`` in the experiment directory:
-ModelE-Control will create directories inside the root called
-``builds`` and ``pgks``.  Each experiment is then administered
-separately, with its own root.
-
-We recommend users start with the *one root per experiment* model, and
-will assume that choice going forward.
+   optional arguments:
+     -h, --help            show this help message and exit
+     --ectl ECTL           Root of ectl tree: ectl/runs, ectl/builds, ectl/pkgs
+     --rundeck RUNDECK, -rd RUNDECK
+                           Rundeck to use in setup
+     --src SRC, -s SRC     Top-level directory of ModelE source
+     --pkgbuild            Name package dir after build dir.
+     --rebuild             Rebuild the package, even if it seems to be fine.
+     --jobs JOBS, -j JOBS  Number of cores to use when building.
 
 
-ModelE Source Directory
----------------------------
+Setup the ModelE Root
+---------------------
 
-Once a ModelE-Control root has been set up, the user must find or
-download a ModelE source directory.  This directory can be anywhere on
-the filesystem, it does not have to live within a root.  A user
-running multiple production runs on the same version of ModelE needs
-only a single ModelE source directory.
+Begin by setting up a ModelE **root directory**; this must be an ancestor of
+all your run directories.  It is marked as a root directory by the
+presence of a file named ``ectl.conf``.  For example:
+
+.. code-block:: console
+
+   $ mkdir ~/exp    # The root directory
+   $ echo >~/exp/ectl.conf
+
+**Notes:**
+
+#. Run directories need to be held within the root directory, but not
+   necessarily as direct children.  For example, the following
+   directory structure is common:
+
+   .. modele-control:: console
+      exp/               # Root directory
+          experiment1/
+              run1/      # Run 1 of experiment 1
+              run2/      # Run 2 of experiment 1
+          experiment2/
+              run1/      # Run 1 of experiment 2
+              run2/      # Run 2 of experiment 2
+
+#. There are no restrictions on what can go inside the root in
+   addition to ModelE runs.  Typically, they may contain
+   pre-processing and post-processing code, graphs, ModelE source
+   directories --- anything needed by the user while building an
+   experiment.
+
+#. The user may have more than one root; although there is rarely a
+   need to do so.
+
+#. Any existing directory may be turned into a root.  For example:
+
+   .. code-block:: console
+
+      $ echo >~/ectl.conf   # Turn ~ into a root
+
 
 
 Download ModelE Source
-~~~~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^^^^
 
-ModelE source is typically obtained by downloading from Simplex, or some other
-Git repository::
+Once a root has been set up, the user must find or download a ModelE
+source directory.  This directory can be anywhere on the filesystem,
+it does not have to live within a root.  Source directories may be
+shared by mutliple run directories.  ModelE source is typically
+obtained by downloading from Simplex, or some other Git repository:
 
-    cd ~/exp    # Experiment directory
-    git clone simplex.giss.nasa.gov:/giss/gitrepo/modelE.git
-    cd modelE
-    git checkout <branch>
+.. code-block:: console
 
-.. note::
-    ``<branch>`` is the ModelE branch you wish to use: ``master``,
-    ``develop``, ``landice``, ``cmake``, etc.
+   $ cd ~/exp    # Root directory
+   $ git clone simplex.giss.nasa.gov:/giss/gitrepo/modelE.git -b <branch>
 
-.. note::
-    The ``cmake`` build *must* be enabled on the branch you choose.
-    If it is not, merge the ``cmake`` branch into your branch.
+**Notes:**
+
+#. ``<branch>`` is the ModelE branch you wish to use: ``master``,
+   ``develop``, ``landice``, ``cmake``, etc.
+
+#. The ``cmake`` build *must* be enabled on the branch you choose.  If
+   it is not, merge the ``cmake`` branch into your branch.  For
+   example:
+
+   .. code-block:: console
+
+      $ git clone simplex.giss.nasa.gov:/giss/gitrepo/modelE.git -b <branch>
+      $ cd modelE
+      $ git merge origin/cmake
+
+   This should add about 70 files; but should not have any conflicts
+   or change any existing source files.
 
 
 Setup ModelE Source
-~~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^^
 
 From the ModelE download directory, type the following::
 
-    cd ~/exp/modelE
-    spack uninstall -ay modele@local;spack setup modele@local
+.. code-block:: console
 
-This creates a file ``spconfig.py``, which is used in the build
-process to configure CMake for your system.
+    $ cd ~/exp/modelE
+    $ spack uninstall -ay modele@local;spack setup modele@local
 
-Alternately, you can copy ``spconfig.py`` from another working ModelE
-source directory with the same dependencies.
+This finds all of ModelE's dependencies and creates a file
+``spconfig.py``, which is used in the build process to configure
+ModelE's dependencies for your system.  Alternately, you can copy
+``spconfig.py`` from another working ModelE source directory.
 
-Setup a Run
-~~~~~~~~~~~~~
+Create a Run
+^^^^^^^^^^^^
 
-It is now possible to set up a ModelE run directory.  ModelE-Control
+It is now possible to create a ModelE run directory.  ModelE-Control
 needs to know which source directory and rundeck you wish to use for
 this run, as well as the name of the run directory you are creating.
 For example, suppose you wish to create a run directory called
 ``myrun``::
 
     cd ~/exp
-    ectl setup myrun --src modelE --rundeck modelE/templates/E4F40.R --src modelE
+    ectl setup myrun --src ~/exp/modelE --rundeck ~/exp/modelE/templates/E4F40.R
 
 This will do the following:
 
@@ -209,7 +217,7 @@ This will do the following:
        -- Set runtime path of ".../bin/modelexe" to ...
 
 Start the Run
-~~~~~~~~~~~~~~
+^^^^^^^^^^^^^
 
 To start a run, for example, to run with two processors::
 
@@ -256,7 +264,7 @@ ModelE-Control shows run status::
     rpfische   445 92.2  0.1 13624436 242348 pts/9 Rl   17:31   0:00 /gpfsm/dnb53/rpfische/exp/test/pkg/bin/modelexe -cold-restart -i I
 
 View the Log
-~~~~~~~~~~~~~
+^^^^^^^^^^^^
 
 The ModelE STDOUT/STDERR log file(s) are written into the directory
 ``myrun/log``, and are named by MPI rank::
@@ -276,7 +284,7 @@ While ModelE is running, a log file may be watched via::
     tail -f myrun/log/q.1.0
 
 Manage the Run
-~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^
 
 After a run has been started, you can inspect the status of the run; for example::
 
@@ -314,7 +322,7 @@ simulation has terminated, ``ectl ps`` looks like::
     <No Running Processes>
 
 Stop the Run
-~~~~~~~~~~~~~
+^^^^^^^^^^^^
 
 In order to stop a run::
 

@@ -11,8 +11,7 @@ to do common tasks, or would make mistakes in submitting jobs.
 Design Requirements
 --------------------
 
-This
-experience led to a number of design goals:
+This experience led to a number of design goals:
 
 1. There should be simple, high-level commands that do what users need
    with ModelE, without bothering them with the details.  The list of
@@ -75,18 +74,21 @@ of building and running ModelE.  It is an evolution of existing
 practice and scripts.  The result is a single ``ectl`` command, like
 ``git``, with sub-commands for all ModelE operations.
 
-Technical Core
----------------
+Advantages
+----------
 
-This section describes background infromation on the core technology
-behind ModelE-Control.  Knowledge of this section is not absolutely
-necessary to use ModelE-Control.
+Before we dive into using ModelE Control, this section explains a few
+of the main concepts and advantages offered by the system.
 
-Source, Build, Package and Run Directories
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-In running ModelE, ModelE-Control distinguishes between four different
+Directories
+^^^^^^^^^^^
+
+In running ModelE, ModelE-Control distinguishes between five different
 directories:
+
+* **root**: An umbrella directory containing multiple run
+  directories.
 
 * **run**: The ModelE run directory; that is, the directory in
   which ModelE output and other data files are written.
@@ -97,10 +99,46 @@ directories:
 * **build**: The location where ModelE source code is built, which
   always happens out-of-source with ModelE-Control.
 
+* **package**: The location for ModelE binaries.
 
 
 
+The *run* directory is central to ``modele-control``, commands all
+operate on a run directory.  Within the run directory are symbolic
+links to the source (``src``), build (``build``) and package (``pkg``)
+directories currently associated with that run.  This use of symbolic
+links to associate directories with each other has many advantages:
+
+#. Users have flexibility to place related runs together, whether or
+   not they were built from the same source.
+#. Different runs using the same source but different rundecks will
+   build in different build directories, limiting the need for large
+   rebuilds.
+#. Packages are guaranteed to last at least as long as the run that
+   needs them, no matter what the user does to the associated source
+   or build directory in the meantime.
 
 Rundeck Management
-~~~~~~~~~~~~~~~~~~~
+^^^^^^^^^^^^^^^^^^
 
+Users typically start with a rundeck supplied in the ModleE
+repository, and then modify it as needed.  This works, until ModelE is
+updated, and the rundeck templates with it.  At that point, the user
+is left with a new rundeck that works but without modifications; and
+an old rundeck than no longer works.  The user is forced to manually
+re-apply the edits made to the old rundeck, to the new rundeck.
+
+ModelE Control mostly eliminates the need to manually merge rundecks.
+When a source directory is updated, ModelE Control will use Git to
+apply the user's rundeck modifications to the new rundeck.  In case a
+rundeck changes in the middle of a run, this also allows the user to
+reconstruct when that change happened.
+
+`I` File Management
+"""""""""""""""""""
+
+Somtimes, users need to change rundeck parameters in the middle of a
+run.  In the past, that was done by modifying the `I` file.  This was
+not user friendly becuase the `I` file is not the same as the original
+rundeck.  With ModelE Control, the user can edit the rundeck directly
+when making parameter changes.

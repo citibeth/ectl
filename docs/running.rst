@@ -71,7 +71,7 @@ presence of a file named ``ectl.conf``.  For example:
 
 
 Download ModelE Source
-^^^^^^^^^^^^^^^^^^^^^^
+----------------------
 
 Once a root has been set up, the user must find or download a ModelE
 source directory.  This directory can be anywhere on the filesystem,
@@ -101,7 +101,7 @@ obtained by downloading from Simplex, or some other Git repository:
 
 
 Setup ModelE Source
-^^^^^^^^^^^^^^^^^^^
+-------------------
 
 From the ModelE download directory, type the following:
 
@@ -116,7 +116,7 @@ ModelE's dependencies for your system.  Alternately, you can copy
 ``spconfig.py`` from another working ModelE source directory.
 
 Create a Run
-^^^^^^^^^^^^
+------------
 
 It is now possible to create a ModelE run directory.  ModelE-Control
 needs to know which source directory and rundeck you wish to use for
@@ -229,7 +229,7 @@ This will do the following:
       -- Set runtime path of ".../bin/modelexe" to ...
 
 Start the Run
-^^^^^^^^^^^^^
+-------------
 
 To start a run, for example, to run with two processors:
 
@@ -282,7 +282,7 @@ ModelE-Control shows run status:
    rpfische   445 92.2  0.1 13624436 242348 pts/9 Rl   17:31   0:00 /gpfsm/dnb53/rpfische/exp/test/pkg/bin/modelexe -cold-restart -i I
 
 View the Log
-^^^^^^^^^^^^
+------------
 
 The ModelE STDOUT/STDERR log file(s) are written into the directory
 ``myrun/log``, and are named by MPI rank:
@@ -306,7 +306,7 @@ While ModelE is running, a log file may be watched via:
    $ tail -f myrun/log/q.1.0
 
 Manage the Run
-^^^^^^^^^^^^^^
+--------------
 
 After a run has been started, you can inspect the status of the run;
 for example:
@@ -353,7 +353,7 @@ simulation has terminated, ``ectl ps`` looks like:
    <No Running Processes>
 
 Stop the Run
-^^^^^^^^^^^^
+------------
 
 In order to stop a run:
 
@@ -373,7 +373,7 @@ Once the ``stop`` process is complete, ``ectl ps`` output should
 reflect that.
 
 Post-Mortem
-~~~~~~~~~~~~
+-----------
 
 Once a ModelE run has stopped, it is possible to determine how it
 stopped, using Everytrace:

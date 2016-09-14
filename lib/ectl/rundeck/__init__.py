@@ -37,6 +37,7 @@ def download_file(sval, download_dir):
 
     try:
         with open(tmp_file_name, 'wb') as fout:
+            print('Downloading {0}'.format(url))
             u = urllib2.urlopen(url)
             meta = u.info()
             file_size = int(meta.getheaders("Content-Length")[0])

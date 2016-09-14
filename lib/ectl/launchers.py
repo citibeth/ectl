@@ -25,6 +25,25 @@ FINISHED=5
 _status_str = ['NONE', 'INITIAL', 'QUEUED', 'RUNNING', 'STOPPED', 'FINISHED']
 
 
+# --------------------------------------------------------
+# http://stackoverflow.com/questions/12902008/python-how-to-find-out-whether-hyperthreading-is-enabled
+cpusRE = re.compile(r'CPU\(s\):\s*(.*)')
+threadsRE = re.compile(r'Thread\(s\) per core:\s*(.*)')
+def detect_ncores():
+    buf = StringIO.StringIO()
+    p = subprocess.Popen('lscpu', stdout=subprocess.PIPE)
+    output = p.stdout.read()
+    p.wait()
+    for line in output.split('\n'):
+        match = cpusRE.match(line)
+        if match is not None:
+            cpus = int(match.group(1))
+        else:
+            match = threadsRE.match(line)
+            if match is not None:
+                threads = int(match.group(1))
+    return cpus // threads
+# --------------------------------------------------------
 notFoundRE = re.compile(r'.*?=>\s+not found.*')
 def check_ldd(exe_fname):
     """Using ldd, checks that a binary can load."""

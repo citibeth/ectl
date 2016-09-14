@@ -1,3 +1,4 @@
+from __future__ import print_function
 import multiprocessing
 import os
 import hashlib
@@ -128,7 +129,12 @@ def setup(parser, args, unknown_args):
     rundeck_dir = os.path.join(args.run, 'rundeck')
     rundeck_R = os.path.join(rundeck_dir, 'rundeck.R')
 
-    template_path = [os.path.join(pathutil.modele_root(rundeck), 'templates')]
+    # The ModelE directory associated with our rundeck
+    # If the rundeck is outside a ModelE directory, use
+    # src instead.
+    rundeck_src = pathutil.modele_root(rundeck) or src
+
+    template_path = [os.path.join(rundeck_src, 'templates')]
     if not os.path.exists(rundeck_dir):
         # Create a new rundeck.R
         try:

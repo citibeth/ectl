@@ -19,24 +19,6 @@ import time
 # TODO: Be careful not to leave around zero-length files when downloading
 
 # =====================================================================
-# http://stackoverflow.com/questions/12902008/python-how-to-find-out-whether-hyperthreading-is-enabled
-cpusRE = re.compile(r'CPU\(s\):\s*(.*)')
-threadsRE = re.compile(r'Thread\(s\) per core:\s*(.*)')
-def detect_ncores():
-    buf = StringIO.StringIO()
-    p = subprocess.Popen('lscpu', stdout=subprocess.PIPE)
-    output = p.stdout.read()
-    p.wait()
-    for line in output.split('\n'):
-        match = cpusRE.match(line)
-        if match is not None:
-            cpus = int(match.group(1))
-        else:
-            match = threadsRE.match(line)
-            if match is not None:
-                threads = int(match.group(1))
-    return cpus // threads
-
 def detect_mpi(pkg):
     """Detects the MPI library being used, given the pkg directory.
     This will be done by running `ldd modelexe`"""
@@ -181,6 +163,11 @@ class Status(object):
         self.launch_list = read_launch_txt(self.run)
         self.launch_txt = None if self.launch_list is None else dict(self.launch_list)
         self.status = self._get_status()
+
+    def refresh_status(self):
+        """Poll the status (RUNNING, STOPPED, etc) of this run directory."""
+        self.status = self._get_status()
+        return self.status
 
     @property
     def sstatus(self):

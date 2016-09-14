@@ -15,10 +15,9 @@ def setup_parser(subparser):
         help='Directory of run to give execution command')
     subparser.add_argument('--timespan', '-ts', action='store', dest='timespan',
         help='[iso8601],[iso8601],[iso8601] (start, cold-end, end) Timespan to run it for')
-#    subparser.add_argument('--end', '-e', action='store', dest='end',
-#        help='[iso8601] Time to stop the run')
-#    subparser.add_argument('-o', action='store', dest='log_dir',
-#        help="Name of file for output (relative to rundir); '-' means STDOUT")
+    subparser.add_argument('--force', '-f', action='store_true', dest='force',
+        default=False,
+        help='Overwrite run without asking (on start)')
     subparser.add_argument('-l', '--launcher', action='store', dest='launcher',
         help='How to run the program')
 
@@ -32,6 +31,50 @@ def parse_date(str):
     if len(str) == 0:
         return None
     return iso8601.parse_date(str)
+
+def remake_dir(dir):
+    """Creates a directory, renaming the old one to <dir>.v???"""
+    if os.path.exists(dir):
+        print('EXISTS')
+        # Move to a '.vXX' name
+        root,leaf = os.path.split(dir)
+        dirRE = re.compile(leaf + r'\.v(\d+)')
+        max_v = 0
+        for fname in os.listdir(root):
+            match = dirRE.match(fname)
+            if match is not None:
+                v = int(match.group(1))
+                if v > max_v:
+                    max_v = v
+        next_fname = os.path.join(root, '%s.%02d' % (leaf, max_v+1))
+        print('next_fname', next_fname)
+        os.rename(dir, next_fname)
+
+    os.mkdir(dir)
+
+
+def make_vdir(dir):
+	"""Creates a directory named <dir>XX, and symlinks <dir> to it."""
+
+    # Find the next 'vXXX' name to use
+    root,leaf = os.path.split(dir)
+    dirRE = re.compile(leaf + r'(\d+)')
+    max_v = 0
+    for fname in os.listdir(root):
+        match = dirRE.match(fname)
+        if match is not None:
+            v = int(match.group(1))
+            max_v = max(max_v, v)
+    next_fname = '%s%02d' % (leaf, max_v+1)
+    os.mkdir(os.path.join(root, next_fname))
+
+    # Create symlink log -> log.vXXX
+    try:
+        #shutil.rmtree(dir)
+        os.remove(dir)
+    except OSError:
+        pass
+    os.symlink(next_fname, dir)
 
 def run(args, cmd, verify_restart=False, rsf=None):
     """cmd: 'start', 'run', 'restart'
@@ -76,7 +119,7 @@ def run(args, cmd, verify_restart=False, rsf=None):
     cold_restart = (cmd == 'start') or (status.status == launchers.INITIAL)
 
     if cold_restart:    # Start a new run
-        if status.status >= launchers.STOPPED:
+        if (status.status >= launchers.STOPPED) and (not args.force):
             if not ectl.util.query_yes_no('Run is STOPPED; do you wish to overwrite and restart?', default='no'):
                 sys.exit(-1)
 
@@ -122,18 +165,7 @@ def run(args, cmd, verify_restart=False, rsf=None):
 
     # -------- Determine log file(s)
     if log_dir != '-':
-        try:
-            shutil.rmtree(log_dir)
-        except:
-            pass
-        os.mkdir(log_dir)
-
-        log_main = os.path.join(paths.run,'log0')
-        try:
-            os.remove(log_main)
-        except:
-            pass
-        os.symlink(os.path.join(log_dir, 'l.1.0'), log_main)
+        make_vdir(log_dir)
         mpi_cmd.append('-output-filename')
         mpi_cmd.append(os.path.join(log_dir, 'q'))
 

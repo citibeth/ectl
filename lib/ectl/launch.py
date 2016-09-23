@@ -14,7 +14,7 @@ def setup_parser(subparser):
     subparser.add_argument('run', nargs='?', default='.',
         help='Directory of run to give execution command')
     subparser.add_argument('--timespan', '-ts', action='store', dest='timespan',
-        help='[iso8601],[iso8601],[iso8601] (start, cold-end, end) Timespan to run it for')
+        help='[iso8601],[iso8601],[iso8601] (start,end) Timespan to run it for')
     subparser.add_argument('--force', '-f', action='store_true', dest='force',
         default=False,
         help='Overwrite run without asking (on start)')
@@ -76,11 +76,23 @@ def make_vdir(dir):
         pass
     os.symlink(next_fname, dir)
 
-def run(args, cmd, verify_restart=False, rsf=None):
-    """cmd: 'start', 'run', 'restart'
+
+def rd_set_ts(rd, cold_start, start_ts, end_ts):
+    """Modifies the rundeck with start and end times."""
+
+    if (not cold_start) and (start_ts is not None):
+        raise ValueError('Cannot set a start timestamp in the middle of a run!')
+    if start_ts is not None:
+        rd.set(('INPUTZ', 'START_TIME'), datetime.datetime(*start_ts))
+    if end_ts is not None:
+        rd.set(('INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
+
+
+def run(args, cmd, rsf=None):
+    """Top-level that parses command line arguments
+
+    cmd: 'start', 'run', 'restart'
         User-level command calling this
-    verify_restart:
-        If True, then ask user if we're starting a run over.
     rsf:
         Name of restart file"""
 
@@ -106,33 +118,75 @@ def run(args, cmd, verify_restart=False, rsf=None):
     if slauncher is None:
         raise ValueError('No launcher specified.  Please use --launcher command line option, or set the ECTL_LAUNCHER environment variable.  Valid values are mpi, slurm and slurm-debug.')
 
+    launch(args.run, launcher=slauncher, force=args.force,
+        ntasks=args.np, time=args.time,
+        rundeck_modifys=[lambda rd, cold_start: rd_set_ts(rd, cold_start, start_ts, end_ts)],
+        cold_start=(cmd == 'start'))
 
-    paths = rundir.FollowLinks(args.run)
+
+def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(), cold_start=False, rsf=None):
+    """API call to start a ModelE execution.
+
+    Warm/Cold Restart is determined as follows:
+        if rsf is not None:
+            if not exists(rsf): ERROR: Specified restart file doesn't exist.
+            if cold_start: ERROR: Cannot specify cold-start and restart file.
+            WARM START
+        elif cold_start or (status.status == launchers.INITIAL):
+            COLD START
+        else:
+            WARM START
+
+    run: str
+        Run directory to launch.
+    launcher: str
+        Name of launcher to use (default: $ETL_LAUNCHER env var)
+    force: bool
+        On restart, overwrite stopped runs without asking user?
+    ntasks: int
+        Number of MPI nodes to run
+    time: str
+        Length of time to run (SLURM format specifier for now)
+    rundeck_modifys: [fn(rd, cold_start)]  #, str cmd, rundir.Status status)]
+        These modifications are applied to in-memory rundeck when writing
+        the I file.
+    cmd: 'start' or 'run'
+        Helps modele-control determine user behavior
+    rsf:
+        Restart or checkpoint file to start from.
+
+    """
+
+    # Check arguments
+    if rsf is not None:
+        if not os.path.exists(rsf):
+            raise ValueError('Specified restart file does not exist: %s' % rsf)
+        if cold_start:
+            raise ValueError('Cannot specify a colde start and rsf file together.')
+
+    paths = rundir.FollowLinks(run)
     status = rundir.Status(paths.run)
     if (status.status == launchers.NONE):
-        sys.stderr.write('Run does not exist, cannot run: {0}\n'.format(args.run))
-        sys.exit(-1)
+        raise ValueError('Run does not exist, cannot run: {0}\n'.format(run))
     if (status.status == launchers.RUNNING):
-        sys.stderr.write('Run is already running: {0}\n'.format(args.run))
-        sys.exit(-1)
+        raise ValueError('Run is already running: {0}\n'.format(run))
 
-    cold_restart = (cmd == 'start') or (status.status == launchers.INITIAL)
+    # Force cold start if there's nothing to warm start from.
+    # This is routine, when running for the first time.
+    _cold_start = cold_start or (status.status == launchers.INITIAL)
 
-    if cold_restart:    # Start a new run
-        if (status.status >= launchers.STOPPED) and (not args.force):
+    if _cold_start:    # Start a new run
+        if (status.status >= launchers.STOPPED) and (not force):
             if not ectl.util.query_yes_no('Run is STOPPED; do you wish to overwrite and restart?', default='no'):
                 sys.exit(-1)
 
     else:    # Continue a previous run
-        if start_ts is not None:
-            raise ValueError('Cannot set a start timestamp in the middle of a run!')
-
         if status.status == launchers.FINISHED:
-            sys.stderr.write('Run is finished, cannot continue: {0}\n'.format(args.run))
+            sys.stderr.write('Run is finished, cannot continue: {0}\n'.format(run))
             sys.exit(-1)
 
     modelexe = os.path.join(paths.run, 'pkg', 'bin', 'modelexe')
-    launcher = rundir.new_launcher(paths.run, slauncher)
+    _launcher = rundir.new_launcher(paths.run, launcher)
     log_dir = os.path.join(paths.run, 'log')
 
     # ------- Load the rundeck and rewrite the I file (and symlinks)
@@ -141,14 +195,28 @@ def run(args, cmd, verify_restart=False, rsf=None):
         rd.resolve(file_path=ectl.rundeck.default_file_path, download=True,
             download_dir=ectl.rundeck.default_file_path[0])
 
-        # Set timespan for run end date
-        if start_ts is not None:
-            rd.set(('INPUTZ', 'START_TIME'), datetime.datetime(*start_ts))
-        if end_ts is not None:
-            rd.set(('INPUTZ_cold' if cold_restart else 'INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
+        # Copy stuff from INPUTZ_cold to INPUTZ if this is a cold start.
+        # This eliminates the need for the '-cold-restart' flag to modelexe
+        # It replaces the following lines in MODELE.f:
+        #          READ (iu_IFILE,NML=INPUTZ,ERR=900)
+        #          if (coldRestart) READ (iu_IFILE,NML=INPUTZ_cold,ERR=900)
+        if _cold_start:
+            for pname,param in list(rd.params.items()):
+                if not isinstance(pname, tuple):
+                    continue
+                if pname[0] == 'INPUTZ_cold':
+                    new_pname = ('INPUTZ', pname[1])
+                    param.pname = new_pname
+                    rd.params[new_pname] = param
+                    del rd.params[pname]
 
+            # This is probably redundant.
+            rd.set(('INPUTZ', 'ISTART'), str(2))
 
-#        sections = rundeck.ParamSections(rd)
+        # Do additional modifications to the rundeck
+        for rd_modify in rundeck_modifys:
+            rd_modify(rd, _cold_start)
+        
         rundir.make_rundir(rd, paths.run)
 
     except IOError:
@@ -171,15 +239,19 @@ def run(args, cmd, verify_restart=False, rsf=None):
 
     # ------ Add modele to the command
     modele_cmd = [modelexe]
-    if cold_restart:
-        modele_cmd.append('-cold-restart')
+#    if _cold_start:
+#        modele_cmd.append('-cold-restart')
     modele_cmd.append('-i')
     modele_cmd.append('I')
 
     # ------- Run it!
-    launcher(mpi_cmd, modele_cmd, np=args.np, time=args.time)
-    launcher.wait()
+    _launcher(mpi_cmd, modele_cmd, np=ntasks, time=time)
+    _launcher.wait()
     print_status(paths.run)
+
+
+
+
 # --------------------------------------------------------------------
 def print_status(run,status=None):
     """run:

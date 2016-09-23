@@ -125,7 +125,8 @@ class Params(dict):
         try:
             param = self[pname]
             param.__init__(pname, type, value)
-            param.lines.append(line)
+            if line is not None:
+                param.lines.append(line)
         except KeyError:
             param = Param(pname, type, value, line=line)
             self[pname] = param

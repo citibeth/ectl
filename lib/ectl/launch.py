@@ -54,7 +54,7 @@ def remake_dir(dir):
 
 
 def make_vdir(dir):
-	"""Creates a directory named <dir>XX, and symlinks <dir> to it."""
+    """Creates a directory named <dir>XX, and symlinks <dir> to it."""
 
     # Find the next 'vXXX' name to use
     root,leaf = os.path.split(dir)
@@ -148,7 +148,7 @@ def run(args, cmd, verify_restart=False, rsf=None):
             rd.set(('INPUTZ_cold' if cold_restart else 'INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
 
 
-        sections = rundeck.ParamSections(rd)
+#        sections = rundeck.ParamSections(rd)
         rundir.make_rundir(rd, paths.run)
 
     except IOError:

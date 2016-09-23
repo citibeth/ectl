@@ -280,17 +280,18 @@ def setup(parser, args, unknown_args):
                 raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'spconfig.py'))
             subprocess.check_call(['make', 'install', '-j%d' % jobs])
         finally:
-            # Remove files from modele-control.pyar
-            os.chdir(src)
-            if os.path.exists(MODELE_CONTROL_PYAR):
-                print('Removing files from modele-control.pyar')
-                with open(MODELE_CONTROL_PYAR) as fin:
-                    for fname in pyar.list_archive(fin):
-                        # print('Removing %s' % fname)
-                        try:
-                            os.remove(fname)
-                        except OSError:
-                            pass
+            if False:
+                # Remove files from modele-control.pyar
+                os.chdir(src)
+                if os.path.exists(MODELE_CONTROL_PYAR):
+                    print('Removing files from modele-control.pyar')
+                    with open(MODELE_CONTROL_PYAR) as fin:
+                        for fname in pyar.list_archive(fin):
+                            # print('Removing %s' % fname)
+                            try:
+                                os.remove(fname)
+                            except OSError:
+                                pass
 
 
     # ------------------ Download input files

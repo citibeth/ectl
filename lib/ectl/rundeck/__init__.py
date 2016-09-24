@@ -6,7 +6,7 @@ import os
 import sys
 from ectl import pathutil
 import copy
-import urllib2
+from six.moves import urllib
 from ectl import xhash
 
 # parameter types
@@ -38,7 +38,7 @@ def download_file(sval, download_dir):
     try:
         with open(tmp_file_name, 'wb') as fout:
             print('Downloading {0}'.format(url))
-            u = urllib2.urlopen(url)
+            u = urllib.urlopen(url)
             meta = u.info()
             file_size = int(meta.getheaders("Content-Length")[0])
             print("Downloading: %s Bytes: %s" % (file_name, file_size))
@@ -95,8 +95,6 @@ class Param(object):
             dt = self.value
             if not isinstance(dt, datetime.datetime):
                 raise ValueError('Values of type DATETYPE must have Python type datetime.datetime')
-            if (dt.minute!=0) or (dt.second !=0) or (dt.microsecond!=0):
-                raise ValueError('Values of type DATETYPE must be on the hour.  Error in: {0}'.format(dt))
             if (dt.tzinfo is not None):
                 raise ValueError('Values of type DATETYPE cannot have a timezone.  Error in: {0}'.format(dt))
 
@@ -105,7 +103,7 @@ class Param(object):
         return self.lines[-1]
 
     def __lt__(self, other):
-        return self.pname < other.pname
+        return str_to_tuple(self.pname) < str_to_tuple(other.pname)
 
     def __repr__(self):
         return repr((self.pname, self.type, self.value))
@@ -123,6 +121,7 @@ class Params(dict):
                 type = GENERAL
 
         try:
+            # Re-use existing param, to keep rundeck line affiliations
             param = self[pname]
             param.__init__(pname, type, value)
             if line is not None:
@@ -291,6 +290,12 @@ class Rundeck(object):
         self.set = self.params.set
         self.resolve = self.params.resolve
 
+    def __getitem__(self, key):
+        return self.params[key].value
+
+    def __setitem__(self, key, value):
+        self.params.set(key, value)
+
     def update_hash(self, hash):
         xhash.update(self.build, hash)
 
@@ -417,9 +422,25 @@ def load(fname, modele_root=None, template_path=None):
 
     return rd
 # ----------------------------------------------------
-def namelist_time(suffix, dt):
+def namelist_time_end(suffix, dt, dtsrc):
+    seconds_in_day = dt.hour*3600 + dt.minute*60 + dt.second
+    dtsrc_in_day = int(seconds_in_day / dtsrc + .5)
+    if abs(seconds_in_day - dtsrc_in_day * dtsrc) > 1e-7:
+        raise ValueError('End-time is non-integral number of timesteps: {0}'.format(dt))
+
+    return 'YEAR{0}={1},MONTH{0}={2},DATE{0}={3},TIME{0}={4},' \
+        .format(suffix,dt.year,dt.month,dt.day,dtsrc_in_day)
+
+def namelist_time_start(suffix, dt):
+    if dt.hour != 0 or dt.minute != 0 or dt.second != 0:
+        raise ValueError('Start time must be on the hour: {0}'.format(dt))
     return 'YEAR{0}={1},MONTH{0}={2},DATE{0}={3},HOUR{0}={4},' \
         .format(suffix,dt.year,dt.month,dt.day,dt.hour)
+
+def str_to_tuple(x):
+    if isinstance(x, str):
+        return (x,)
+    return x
 
 
 class ParamSections(object):
@@ -434,6 +455,7 @@ class ParamSections(object):
         self.inputz_cold = []
 
         # Organize self.parameters into ModelE sections
+        dtsrc = float(rd['DTsrc'])
         for param in sorted(list(rd.params.values())):
             pname = param.pname
             if isinstance(pname, str):    # Non-compound name
@@ -459,9 +481,9 @@ class ParamSections(object):
                     raise ValueError('Unknown compound name: {0}'.format(pname))
 
                 if pname[1].upper() == 'END_TIME':
-                    iz.append(namelist_time('E', param.value))
+                    iz.append(namelist_time_end('E', param.value, dtsrc))
                 elif pname[1].upper() == 'START_TIME':
-                    iz.append(namelist_time('I', param.value))
+                    iz.append(namelist_time_start('I', param.value))
                 else:
                     line = '{0}={1},'.format(pname[1],param.value)
                     iz.append(line)

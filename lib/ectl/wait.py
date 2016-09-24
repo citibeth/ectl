@@ -10,7 +10,6 @@ from ectl import pathutil,rundeck,rundir,xhash,launchers
 from ectl.rundeck import legacy
 import re
 from ectl import iso8601
-import StringIO
 import subprocess
 import sys
 import shutil
@@ -21,6 +20,9 @@ import signal
 import time
 
 def wait(runs, recursive=False):
+
+    if isinstance(runs, str):
+        runs = [runs]
 
     doruns = rundir.all_rundirs(runs, recursive=recursive)
 
@@ -44,6 +46,7 @@ def wait(runs, recursive=False):
         # Determine what is no longer running
         to_remove = set()
         for status in running:
+            print('status', status.sstatus)
             if status.refresh_status() != launchers.RUNNING:
                 print('{0}: {1}'.format(status.run, status.sstatus))
                 to_remove.add(status)

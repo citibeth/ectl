@@ -13,7 +13,6 @@ import ectl.config
 import copy
 import subprocess
 import signal
-import StringIO
 import time
 
 # TODO: Be careful not to leave around zero-length files when downloading

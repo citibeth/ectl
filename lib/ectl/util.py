@@ -1,4 +1,6 @@
 import sys
+from contextlib import contextmanager, closing
+import os
 
 # http://stackoverflow.com/questions/3041986/apt-command-line-interface-like-yes-no-input
 def query_yes_no(question, default="yes"):
@@ -32,3 +34,14 @@ def query_yes_no(question, default="yes"):
         else:
             sys.stdout.write("Please respond with 'yes' or 'no' "
                              "(or 'y' or 'n').\n")
+
+# From Spack
+@contextmanager
+def working_dir(dirname, **kwargs):
+    if kwargs.get('create', False):
+        mkdirp(dirname)
+
+    orig_dir = os.getcwd()
+    os.chdir(dirname)
+    yield
+    os.chdir(orig_dir)

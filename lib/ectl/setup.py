@@ -4,6 +4,7 @@ import os
 import hashlib
 import argparse
 import llnl.util.tty as tty
+import ectl.util
 import ectl
 import ectl.cmd
 from ectl import pathutil,rundir,xhash,srcdir,launchers
@@ -51,6 +52,7 @@ def set_link(src, dst):
     src_rel = os.path.relpath(src, start=os.path.split(dst)[0])
     os.symlink(src_rel, dst)
 
+
 def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None):
 
     # Move parameters to different name to maintain SSA coding style below.
@@ -89,6 +91,9 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None)
 
     # ----- Determine the rundeck
     new_rundeck = os.path.abspath(args_rundeck) if args_rundeck is not None else None
+    print('args_rundeck', args_rundeck)
+    print('new_rundeck', new_rundeck)
+
     rundeck = new_rundeck or old.rundeck
     if rundeck is None:
         raise ValueError('No rundeck specified!')
@@ -122,68 +127,68 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None)
     rundeck_src = pathutil.modele_root(rundeck) or src
 
     template_path = [os.path.join(rundeck_src, 'templates')]
+
     if not os.path.exists(rundeck_dir):
         # Create a new rundeck.R
         try:
             os.makedirs(rundeck_dir)
         except OSError:
             pass
-        os.chdir(rundeck_dir)
+        with ectl.util.working_dir(rundeck_dir):
+            git('init', echo=sys.stdout)
+            git('checkout', '-b', 'upstream', echo=sys.stdout)
 
-        git('init', echo=sys.stdout)
-        git('checkout', '-b', 'upstream', echo=sys.stdout)
+            # Copy the rundeck from original location (templates?)
+            print('$ <generating {0}>'.format(rundeck_R))
+            with open(rundeck_R, 'w') as fout:
+                for line in legacy.preprocessor(rundeck, template_path):
+                    fout.write(line.raw)
 
-        # Copy the rundeck from original location (templates?)
-        print('$ <generating {0}>'.format(rundeck_R))
-        with open(rundeck_R, 'w') as fout:
-            for line in legacy.preprocessor(rundeck, template_path):
-                fout.write(line.raw)
+            git('add', 'rundeck.R', echo=sys.stdout)
+            git('commit', '-a', '-m', 'Initial commit from {0}'.format(rundeck), echo=sys.stdout)
 
-        git('add', 'rundeck.R', echo=sys.stdout)
-        git('commit', '-a', '-m', 'Initial commit from {0}'.format(rundeck), echo=sys.stdout)
-
-        # Put it on the user branch (where we normally will reside)
-        git('checkout', '-b', 'user', echo=sys.stdout)
+            # Put it on the user branch (where we normally will reside)
+            git('checkout', '-b', 'user', echo=sys.stdout)
 
     else:
         # Update/merge the rundeck
         # If there are unresolved conflicts, this will raise an exception
 
-        os.chdir(rundeck_dir)
-        try:
-            # Check in changes from user
-            git('checkout', 'user', echo=sys.stdout)    # Exception on the first command
-            git('commit', '-a', '-m', 'Changes from user', echo=sys.stdout, fail_on_error=False)
+        with ectl.util.working_dir(rundeck_dir):
+            try:
+                # Check in changes from user
+                git('checkout', 'user', echo=sys.stdout)    # Exception on the first command
+                git('commit', '-a', '-m', 'Changes from user', echo=sys.stdout, fail_on_error=False)
 
-            # Check in changes from upstream
-            git('checkout', 'upstream', echo=sys.stdout)
-            # Copy the rundeck from original location (templates?)
-            with open(rundeck_R, 'w') as fout:
-                for line in legacy.preprocessor(rundeck, template_path):
-                    fout.write(line.raw)
-            git('commit', '-a', '-m', 'Changes from upstream', echo=sys.stdout, fail_on_error=False)
+                # Check in changes from upstream
+                git('checkout', 'upstream', echo=sys.stdout)
+                # Copy the rundeck from original location (templates?)
+                with open(rundeck_R, 'w') as fout:
+                    for line in legacy.preprocessor(rundeck, template_path):
+                        fout.write(line.raw)
+                git('commit', '-a', '-m', 'Changes from upstream', echo=sys.stdout, fail_on_error=False)
 
-            # Merge upstream changes into user
-            git('checkout', 'user', echo=sys.stdout)
-            git('merge', 'upstream', '-m', 'Merged changes', echo=sys.stdout)    # Will raise if merge needs help
-        except:
-            print('Error merging rundeck; do you have unresolved conflicts?')
+                # Merge upstream changes into user
+                git('checkout', 'user', echo=sys.stdout)
+                git('merge', 'upstream', '-m', 'Merged changes', echo=sys.stdout)    # Will raise if merge needs help
+            except:
+                print('Error merging rundeck; do you have unresolved conflicts?')
 
-            if 'EDITOR' in os.environ:
-                EDITOR = os.environ['EDITOR'].split(' ')
-                print('EDITOR', EDITOR)
-                editor = executable.which(EDITOR[0])
-                args = EDITOR[1:] + [rundeck_R]
-                editor(*args, echo=sys.stdout)
-            else:
-                print('You need to edit the file to resolve conflicts:')
-                print(rundeck_R)
-            print('When you are done resolving conflicts, do:')
-            print('    ectl merge {0}'.format(args_run))
-            print('    ectl setup {0}'.format(args_run))
+                if 'EDITOR' in os.environ:
+                    EDITOR = os.environ['EDITOR'].split(' ')
+                    print('EDITOR', EDITOR)
+                    editor = executable.which(EDITOR[0])
+                    args = EDITOR[1:] + [rundeck_R]
+                    editor(*args, echo=sys.stdout)
+                else:
+                    print('You need to edit the file to resolve conflicts:')
+                    print(rundeck_R)
+                print('When you are done resolving conflicts, do:')
+                print('    ectl merge {0}'.format(args_run))
+                print('    ectl setup {0}'.format(args_run))
 
 
-            sys.exit(1)
+                sys.exit(1)
     print('========= END Rundeck Management')
 
     rd = ectl.rundeck.load(rundeck_R, modele_root=src)
@@ -225,51 +230,50 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None)
             # Unpack CMake build files if a modele-control.pyar file exists
             # If any of these files needs to change, we expect the user to
             # edit the pyar file.
-            os.chdir(src)
-            if os.path.exists(MODELE_CONTROL_PYAR):
-                print('Adding files from modele-control.pyar')
-                with open(MODELE_CONTROL_PYAR) as fin:
-                    pyar.unpack_archive(fin, '.')
+            with ectl.util.working_dir(src):
+                if os.path.exists(MODELE_CONTROL_PYAR):
+                    print('Adding files from modele-control.pyar')
+                    with open(MODELE_CONTROL_PYAR) as fin:
+                        pyar.unpack_archive(fin, '.')
 
-            if args_jobs is None:
-                # number of jobs spack has to build with.
-                jobs = multiprocessing.cpu_count()
-            else:
-                jobs = args_jobs
+                if args_jobs is None:
+                    # number of jobs spack has to build with.
+                    jobs = multiprocessing.cpu_count()
+                else:
+                    jobs = args_jobs
 
-            # Create the build dir if it doesn't already exist
-            if not os.path.isdir(build):
-                os.makedirs(build)
-            os.chdir(build)
+                # Create the build dir if it doesn't already exist
+                if not os.path.isdir(build):
+                    os.makedirs(build)
+                os.chdir(build)
 
-            # Read the shebang out of setup.py to get around 80-char limit
-            spconfig_py = os.path.join(src, 'spconfig.py')
-            cmd = []
-            with open(spconfig_py, 'r') as fin:
-                line = next(fin)
-                if line[0:2] == '#!':
-                    python = line[2:].strip()
+                # Read the shebang out of setup.py to get around 80-char limit
+                spconfig_py = os.path.join(src, 'spconfig.py')
+                cmd = []
+                with open(spconfig_py, 'r') as fin:
+                    line = next(fin)
+                    if line[0:2] == '#!':
+                        python = line[2:].strip()
 
-                    # Make sure this looks like python, not something else
-                    if python.index('python') != 0:
-                        cmd.append(python)
+                        # Make sure this looks like python, not something else
+                        if python.index('python') != 0:
+                            cmd.append(python)
 
-            try:
-                cmd += [spconfig_py,
-                    '-DRUN=%s' % rundeck,
-                    '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
-                    src]
+                try:
+                    cmd += [spconfig_py,
+                        '-DRUN=%s' % rundeck,
+                        '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
+                        src]
 
-                subprocess.check_call(cmd)
-            except OSError as err:
-                sys.stderr.write(' '.join(cmd) + '\n')
-                sys.stderr.write('%s\n' % err)
-                raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'spconfig.py'))
-            subprocess.check_call(['make', 'install', '-j%d' % jobs])
+                    subprocess.check_call(cmd)
+                except OSError as err:
+                    sys.stderr.write(' '.join(cmd) + '\n')
+                    sys.stderr.write('%s\n' % err)
+                    raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'spconfig.py'))
+                subprocess.check_call(['make', 'install', '-j%d' % jobs])
         finally:
             if False:
                 # Remove files from modele-control.pyar
-                os.chdir(src)
                 if os.path.exists(MODELE_CONTROL_PYAR):
                     print('Removing files from modele-control.pyar')
                     with open(MODELE_CONTROL_PYAR) as fin:

@@ -1,3 +1,4 @@
+from __future__ import print_function
 import copy
 import os
 import subprocess
@@ -112,19 +113,13 @@ def run(args, cmd, rsf=None):
     # ------ Parse Arguments
 
     # Launcher to use
-    slauncher = args.launcher
-    if slauncher is None:
-        slauncher = os.environ.get('ECTL_LAUNCHER', None)
-    if slauncher is None:
-        raise ValueError('No launcher specified.  Please use --launcher command line option, or set the ECTL_LAUNCHER environment variable.  Valid values are mpi, slurm and slurm-debug.')
-
-    launch(args.run, launcher=slauncher, force=args.force,
+    launch(args.run, launcher=args.launcher, force=args.force,
         ntasks=args.np, time=args.time,
         rundeck_modifys=[lambda rd, cold_start: rd_set_ts(rd, cold_start, start_ts, end_ts)],
         cold_start=(cmd == 'start'))
 
 
-def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(), cold_start=False, rsf=None):
+def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(), cold_start=False, rsf=None, synchronous=False):
     """API call to start a ModelE execution.
 
     Warm/Cold Restart is determined as follows:
@@ -154,8 +149,15 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         Helps modele-control determine user behavior
     rsf:
         Restart or checkpoint file to start from.
-
+    synchronous:
+        Block until ModelE is done running.  Usually good only for small tests.
     """
+
+    if launcher is None:
+        launcher = os.environ.get('ECTL_LAUNCHER', None)
+    if launcher is None:
+        raise ValueError('No launcher specified.  Please use --launcher command line option, or set the ECTL_LAUNCHER environment variable.  Valid values are mpi, slurm and slurm-debug.')
+
 
     # Check arguments
     if rsf is not None:
@@ -220,7 +222,7 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         rundir.make_rundir(rd, paths.run)
 
     except IOError:
-        print 'Warning: Cannot load rundeck.R.  NOT rewriting I file'
+        print('Warning: Cannot load rundeck.R.  NOT rewriting I file')
 
     # -------- Construct the main command line
     mpi_cmd = ['mpirun', '-timestamp-output']
@@ -245,12 +247,10 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
     modele_cmd.append('I')
 
     # ------- Run it!
-    _launcher(mpi_cmd, modele_cmd, np=ntasks, time=time)
-    _launcher.wait()
-    print_status(paths.run)
-
-
-
+    _launcher(mpi_cmd, modele_cmd, np=ntasks, time=time, synchronous=synchronous)
+    if not synchronous:
+        _launcher.wait()
+        print_status(paths.run)
 
 # --------------------------------------------------------------------
 def print_status(run,status=None):

@@ -22,6 +22,7 @@
 # License along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ##############################################################################
+from __future__ import print_function
 import os
 import sys
 import llnl.util.tty as tty
@@ -49,7 +50,7 @@ class SpackError(Exception):
         else:
             tty.error(self.message)
             if self.long_message:
-                print self.long_message
+                print(self.long_message)
             os._exit(1)
 
 

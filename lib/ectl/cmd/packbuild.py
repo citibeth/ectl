@@ -4,6 +4,7 @@ import os
 import hashlib
 import argparse
 import llnl.util.tty as tty
+import ectl.util
 import ectl
 import ectl.cmd
 from ectl import pathutil,rundir,xhash,srcdir,launchers
@@ -94,6 +95,6 @@ MODELE_CONTROL_FILES = [
 ]
 
 def packbuild(parser, args, unknown_args):
-    os.chdir(args.src)
-    with open('modele-control.pyar', 'w') as fout:
-        pyar.pack_archive(fout, MODELE_CONTROL_FILES, report_fn=print)
+    with ectl.util.working_dir(args.src):
+        with open('modele-control.pyar', 'w') as fout:
+            pyar.pack_archive(fout, MODELE_CONTROL_FILES, report_fn=print)

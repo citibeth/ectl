@@ -22,6 +22,8 @@
 # License along with this program; if not, write to the Free Software
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ##############################################################################
+from __future__ import print_function
+import six
 
 import os
 import re
@@ -121,7 +123,7 @@ class Executable(object):
             raise ValueError("Cannot use `str` as input stream.")
 
         def streamify(arg, mode):
-            if isinstance(arg, basestring):
+            if isinstance(arg, six.string_types):
                 return open(arg, mode), True
             elif arg is str:
                 return subprocess.PIPE, False
@@ -179,11 +181,11 @@ class Executable(object):
                     result += err
                 return result
 
-        except OSError, e:
+        except OSError as e:
             raise ProcessError(
                 "%s: %s" % (self.exe[0], e.strerror), "Command: " + cmd_line)
 
-        except subprocess.CalledProcessError, e:
+        except subprocess.CalledProcessError as e:
             if fail_on_error:
                 raise ProcessError(
                     str(e), "\nExit status %d when invoking command: %s" %

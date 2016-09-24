@@ -28,7 +28,7 @@ class Line(object):
 
         # Remove C-style comments too
         # http://stackoverflow.com/questions/2319019/using-regex-to-remove-comments-from-source-files
-        line = re.sub(re.compile("/\*.*?\*/",re.DOTALL ) ,"" ,line)
+        line = re.sub(re.compile('/\*.*?\*/',re.DOTALL ) ,'' ,line)
 
         line = line.strip()
         return line
@@ -46,13 +46,13 @@ def find_in_path(fname, search_path):
             return candidate
     raise ValueError('File not found in path: %s' % fname)
 
-includeRE = re.compile(b'\s*#include\s*"(.*?)"\s*(!\s*)?')
+includeRE = re.compile('\s*#include\s*"(.*?)"\s*(!\s*)?')
 
 def preprocessor(fname, search_path):
     """Load a fully preprocessed rundeck from the templates directory.
     Works as a generator, producing one line at a time."""
     try:
-        with open(fname, 'rb') as fin:
+        with open(fname, 'r') as fin:
             source_lineno = 0
             while True:
                 line = next(fin)

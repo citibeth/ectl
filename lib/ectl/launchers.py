@@ -1,6 +1,5 @@
 import ectl
 import ectl.rundeck
-
 import re
 import sys
 import os
@@ -13,8 +12,9 @@ import ectl.config
 import copy
 import subprocess
 import signal
-import StringIO
+from six import StringIO
 import time
+import ectl.util
 
 NONE=0
 INITIAL=1
@@ -30,11 +30,12 @@ _status_str = ['NONE', 'INITIAL', 'QUEUED', 'RUNNING', 'STOPPED', 'FINISHED']
 cpusRE = re.compile(r'CPU\(s\):\s*(.*)')
 threadsRE = re.compile(r'Thread\(s\) per core:\s*(.*)')
 def detect_ncores():
-    buf = StringIO.StringIO()
+    buf = StringIO()
     p = subprocess.Popen('lscpu', stdout=subprocess.PIPE)
     output = p.stdout.read()
     p.wait()
-    for line in output.split('\n'):
+    for line in output.split(b'\n'):
+        line = line.decode()
         match = cpusRE.match(line)
         if match is not None:
             cpus = int(match.group(1))
@@ -64,6 +65,7 @@ def check_ldd(exe_fname):
 
 
     for line in proc.stdout:
+        line = line.decode()    # Convert bytes --> str
         match = notFoundRE.match(line)
         if match is not None:
             errors.append(line)
@@ -109,7 +111,9 @@ class SlurmLauncher(object):
             raise ValueError('Illegal profile for SlurmLauncher: {0}'.format(profile))
         self.profile = profile
 
-    def __call__(self, mpi_cmd, modele_cmd, np=None, time=None):
+    def __call__(self, mpi_cmd, modele_cmd, np=None, time=None, synchronous=False):
+        if synchronous:
+            raise ValueError('SlurmLauncher does not currently support synchronous=True')
 
         if np is None:
             raise ValueError('Must specify number of MPI tasks when using Slurm')
@@ -118,46 +122,46 @@ class SlurmLauncher(object):
 
 
         mpi_cmd = copy.copy(mpi_cmd)
-        os.chdir(self.run)
+        with ectl.util.working_dir(self.run):
 
-        # --------- Write out our launch
+            # --------- Write out our launch
 
-        check_ldd(modele_cmd[0])
+            check_ldd(modele_cmd[0])
 
-        # See: http://stackoverflow.com/questions/29661527/how-to-spawn-detached-background-process-on-linux-in-either-bash-or-python
+            # See: http://stackoverflow.com/questions/29661527/how-to-spawn-detached-background-process-on-linux-in-either-bash-or-python
 
-        cmd_str = ' '.join(mpi_cmd + modele_cmd)
-        print(cmd_str)
-        sbatch_cmd = ['sbatch',
-            '--job-name={0}'.format(self.run), 
-            '--account=s1001',
-            '--ntasks={0}'.format(str(np)),
-            '--time={0}'.format(time)]    # 1 minute
+            cmd_str = ' '.join(mpi_cmd + modele_cmd)
+            print(cmd_str)
+            sbatch_cmd = ['sbatch',
+                '--job-name={0}'.format(self.run), 
+                '--account=s1001',
+                '--ntasks={0}'.format(str(np)),
+                '--time={0}'.format(time)]    # 1 minute
 
-        if self.profile == 'debug':
-            sbatch_cmd.append('--qos=debug')
+            if self.profile == 'debug':
+                sbatch_cmd.append('--qos=debug')
 
-        proc = subprocess.Popen(sbatch_cmd,
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        (sout, serr) = proc.communicate('\n'.join([
-            '#!/bin/sh',
-            '#',
-            '',
-            cmd_str]))
-        match = submittedRE.match(sout)
-        sjobid = match.group(1)
+            proc = subprocess.Popen(sbatch_cmd,
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            (sout, serr) = proc.communicate('\n'.join([
+                '#!/bin/sh',
+                '#',
+                '',
+                cmd_str]))
+            match = submittedRE.match(sout)
+            sjobid = match.group(1)
 
-        # Write the launch file
-        with open(os.path.join(self.run, 'launch.txt'), 'w') as out:
-            if self.profile is None:
-                slauncher = 'slurm'
-            else:
-                slauncher = 'slurm-{0}'.format(self.profile)
-            out.write('launcher={0}\n'.format(slauncher))
-            out.write('jobid={0}\n'.format(sjobid))
-            out.write('mpi_cmd={0}\n'.format(' '.join(mpi_cmd)))
-            out.write('modele_cmd={0}\n'.format(' '.join(modele_cmd)))
-            out.write('cwd={0}\n'.format(os.getcwd()))
+            # Write the launch file
+            with open(os.path.join(self.run, 'launch.txt'), 'w') as out:
+                if self.profile is None:
+                    slauncher = 'slurm'
+                else:
+                    slauncher = 'slurm-{0}'.format(self.profile)
+                out.write('launcher={0}\n'.format(slauncher))
+                out.write('jobid={0}\n'.format(sjobid))
+                out.write('mpi_cmd={0}\n'.format(' '.join(mpi_cmd)))
+                out.write('modele_cmd={0}\n'.format(' '.join(modele_cmd)))
+                out.write('cwd={0}\n'.format(os.getcwd()))
 
     def get_status(self, launch_txt):
         cmd = ['scontrol', 'show', 'jobid', '-dd', launch_txt['jobid']]
@@ -192,41 +196,48 @@ class MPILauncher(object):
     def __init__(self, run):
         self.run = os.path.abspath(run)
 
-    def __call__(self, mpi_cmd, modele_cmd, np=None, time=None):
+    def __call__(self, mpi_cmd, modele_cmd, np=None, time=None, synchronous=False):
         """time:
-            Max time to run (ignored)"""
+            Max time to run (ignored)
+        synchronous: bool
+            Block until task completes"""
         mpi_cmd = copy.copy(mpi_cmd)
-        os.chdir(self.run)
+        with ectl.util.working_dir(self.run):
 
-        # --------- determine number of processors to use
-        np = int(np) if np is not None else detect_ncores()
-        mpi_cmd.extend(['-np', str(np)])
+            # --------- determine number of processors to use
+            np = int(np) if np is not None else detect_ncores()
+            mpi_cmd.extend(['-np', str(np)])
 
-        # --------- Write out our launch
-        modele_pid = os.path.join(self.run, 'modele.pid')
-        try:
-            os.remove(modele_pid)
-        except:
-            pass
-        mpi_cmd.extend(['--report-pid', modele_pid])
-        with open(os.path.join(self.run, 'launch.txt'), 'w') as out:
-            out.write('launcher=mpi\n')
-            out.write('pidfile={0}\n'.format(modele_pid))
-            out.write('mpi_cmd={0}\n'.format(' '.join(mpi_cmd)))
-            out.write('modele_cmd={0}\n'.format(' '.join(modele_cmd)))
-            out.write('cwd={0}\n'.format(os.getcwd()))
+            # --------- Write out our launch
+            modele_pid = os.path.join(self.run, 'modele.pid')
+            try:
+                os.remove(modele_pid)
+            except:
+                pass
+            mpi_cmd.extend(['--report-pid', modele_pid])
+            with open(os.path.join(self.run, 'launch.txt'), 'w') as out:
+                out.write('launcher=mpi\n')
+                out.write('pidfile={0}\n'.format(modele_pid))
+                out.write('mpi_cmd={0}\n'.format(' '.join(mpi_cmd)))
+                out.write('modele_cmd={0}\n'.format(' '.join(modele_cmd)))
+                out.write('cwd={0}\n'.format(os.getcwd()))
 
-        check_ldd(modele_cmd[0])
-        print(' '.join(mpi_cmd + modele_cmd))
+            check_ldd(modele_cmd[0])
+            print(' '.join(mpi_cmd + modele_cmd))
 
-        # See: http://stackoverflow.com/questions/29661527/how-to-spawn-detached-background-process-on-linux-in-either-bash-or-python
-
-        # This works so easily because mpirun writes out its own PID
-        # file.  If mpirun did not, then we'd need to do more complex
-        # daemonization stuff.  For example:
-        #      https://github.com/thesharp/daemonize
-        cmd = ['nohup'] + mpi_cmd + modele_cmd
-        subprocess.Popen(cmd)
+            # See: http://stackoverflow.com/questions/29661527/how-to-spawn-detached-background-process-on-linux-in-either-bash-or-python
+            # See also: http://stackoverflow.com/questions/37118991/subprocess-gets-killed-even-with-nohup
+            # (But this had the problem that os.kill() wasn't giving good
+            # info on whether the process was complete)
+            #
+            # This works so easily because mpirun writes out its own PID
+            # file.  If mpirun did not, then we'd need to do more complex
+            # daemonization stuff.  For example:
+            #      https://github.com/thesharp/daemonize
+            cmd = ([] if synchronous else ['nohup'])  + mpi_cmd + modele_cmd
+            proc = subprocess.Popen(cmd) #, preexec_fn=os.setpgrp)
+            if synchronous:
+                proc.wait()
 
     def get_status(self, launch_txt):
         try:
@@ -274,14 +285,15 @@ class MPILauncher(object):
             return
 
         try:
-            sub_pids = re.split('\s+', subprocess.check_output(['pgrep', '-P', str(top_pid)]))
+            sub_pids = re.split(b'\s+', subprocess.check_output(['pgrep', '-P', str(top_pid)]))
 
             pids = set([top_pid] + [int(x) for x in sub_pids if len(x) > 0])
 
             cmd = ['ps', 'aux']
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
-            out.write(next(proc.stdout))
+            out.write(str(next(proc.stdout)))
             for line in proc.stdout:
+                line = line.decode()    # Convert bytes --> str
                 match = psRE.match(line)
                 if match is not None:
                     pid = int(match.group(1))

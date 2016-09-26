@@ -10,7 +10,6 @@ from ectl import pathutil,rundeck,rundir,xhash,launchers
 from ectl.rundeck import legacy
 import re
 from ectl import iso8601
-import StringIO
 import subprocess
 import sys
 import shutil

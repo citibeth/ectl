@@ -10,7 +10,6 @@ from ectl import pathutil,rundeck,rundir,xhash,launchers
 from ectl.rundeck import legacy
 import re
 from ectl import iso8601
-import StringIO
 import sys
 import shutil
 from ectl import iso8601
@@ -40,14 +39,24 @@ def setup_parser(subparser):
 #    match = caldateRE.match(caldate)
 #    return datetime.datetime(match.group(3), match.group(1), match.group(2), match.group(4), match.group(5))
 
-caldateRE = re.compile(r'(\d+)/(\d+)/(\d+)\s+hr\s+(\d+).(\d+)')
+caldateRE = re.compile(r'(\d+)/(\d+)/(\d+)\s+hr\s+([\d\.]+)')
 def get_caldate(fort_nc):
     cmd = ['ncdump', '-h', fort_nc]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     for line in proc.stdout:
+        line = line.decode()    # bytes --> str
         match = caldateRE.search(line)
         if match is not None:
-            return datetime.datetime(int(match.group(3)), int(match.group(1)), int(match.group(2)), int(match.group(4)), int(match.group(5)))
+            hr_f = float(match.group(4))
+
+            # Time is in floating-point hours.  Convert to hh:mm:ss
+            sec = int(hr_f * 3600. + .5)
+            hour = sec // 3600
+            sec -= hour * 3600
+            minute = sec // 60
+            sec -= minute * 60
+
+            return datetime.datetime(int(match.group(3)), int(match.group(1)), int(match.group(2)), hour, minute, sec)
     return None
 
 

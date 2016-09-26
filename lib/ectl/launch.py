@@ -10,6 +10,7 @@ import ectl.util
 import shutil
 from ectl import iso8601
 import datetime
+import netCDF4
 
 def setup_parser(subparser):
     subparser.add_argument('run', nargs='?', default='.',
@@ -78,6 +79,49 @@ def make_vdir(dir):
     os.symlink(next_fname, dir)
 
 
+# ---------------------------------------------------
+def rsf_type(rsf):
+    """Determines whether a restart file is a .rsf or fort.X.nc file."""
+
+    with netCDF4.Dataset(rsf, 'r') as nc:
+        if 'last_itime' not in nc.variables:
+            raise ValueError('File {} does not seem to be a checkpoint or restart file'.format(rsf))
+        if 'aij' in nc.variables:
+            return START_CHECKPOINT
+        else:
+            return START_RSF
+
+# ---------------------------------------------------
+def latest_rsf(rsfs, raise_missing=False):
+    """Finds the checkpoint (fort.X.nc) file with the later timestamp.
+    raise_missing:
+        If set, raise an exception on a missing file."""
+
+    max_itime = -1
+    max_rsf = None
+    for rsf in rsfs:
+        print('rsf=', rsf)
+
+        try:
+            nc = netCDF4.Dataset(rsf, 'r')
+        except:
+            # File failed to open
+            if raise_missing:
+                raise
+            else:
+                continue
+
+        # File is now open
+        try:
+            itime = nc.variables['itime'][:]
+            if itime > max_itime:
+                max_itime = itime
+                max_rsf = rsf
+        finally:
+            nc.close()
+
+    return max_rsf
+# ------------------------------------------------------
 def rd_set_ts(rd, cold_start, start_ts, end_ts):
     """Modifies the rundeck with start and end times."""
 
@@ -89,10 +133,10 @@ def rd_set_ts(rd, cold_start, start_ts, end_ts):
         rd.set(('INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
 
 
-def run(args, cmd, rsf=None):
+def run(args, cmd):
     """Top-level that parses command line arguments
 
-    cmd: 'start', 'run', 'restart'
+    cmd: 'start', 'run'
         User-level command calling this
     rsf:
         Name of restart file"""
@@ -113,24 +157,29 @@ def run(args, cmd, rsf=None):
     # ------ Parse Arguments
 
     # Launcher to use
+    kwargs = dict()
+    if hasattr(args, 'restart_file'):
+        kwargs['restart_file'] = args.restart_file
+
     launch(args.run, launcher=args.launcher, force=args.force,
         ntasks=args.np, time=args.time,
         rundeck_modifys=[lambda rd, cold_start: rd_set_ts(rd, cold_start, start_ts, end_ts)],
-        cold_start=(cmd == 'start'))
+        cold_start=(cmd == 'start'), **kwargs)
 
 
-def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(), cold_start=False, rsf=None, synchronous=False):
+# These are set to match corresponding ISTART values in ModelE
+# See MODELE.f
+START_COLD = 2        # Restart a run, no restart/checkpoint files
+START_CHECKPOINT = 14  # Restart from a fort.1.nc or fort.2.nc file
+START_RSF = 9         # Restart from an .rsf (AIC) file
+
+LATEST = object()    # Token
+COLD = object()
+
+def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(),
+    cold_start=False, restart_file=None,
+    synchronous=False):
     """API call to start a ModelE execution.
-
-    Warm/Cold Restart is determined as follows:
-        if rsf is not None:
-            if not exists(rsf): ERROR: Specified restart file doesn't exist.
-            if cold_start: ERROR: Cannot specify cold-start and restart file.
-            WARM START
-        elif cold_start or (status.status == launchers.INITIAL):
-            COLD START
-        else:
-            WARM START
 
     run: str
         Run directory to launch.
@@ -147,7 +196,9 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         the I file.
     cmd: 'start' or 'run'
         Helps modele-control determine user behavior
-    rsf:
+    cold_start: bool
+        Direction from the user that a cold start is desired.
+    restart_file:
         Restart or checkpoint file to start from.
     synchronous:
         Block until ModelE is done running.  Usually good only for small tests.
@@ -160,9 +211,9 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
 
 
     # Check arguments
-    if rsf is not None:
-        if not os.path.exists(rsf):
-            raise ValueError('Specified restart file does not exist: %s' % rsf)
+    if restart_file is not None:
+        if not os.path.exists(restart_file):
+            raise ValueError('Specified restart file does not exist: %s' % restart_file)
         if cold_start:
             raise ValueError('Cannot specify a colde start and rsf file together.')
 
@@ -173,19 +224,48 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
     if (status.status == launchers.RUNNING):
         raise ValueError('Run is already running: {0}\n'.format(run))
 
-    # Force cold start if there's nothing to warm start from.
-    # This is routine, when running for the first time.
-    _cold_start = cold_start or (status.status == launchers.INITIAL)
+    # --------- Determine start type (start_type) and restart file (rsf)
+    if cold_start and (restart_file is not None):
+        raise ValueError('Cannot use restart file file on a cold start.')
 
-    if _cold_start:    # Start a new run
+    kdisk = None    # First fort.X.nc file to write
+    if cold_start:
+        start_type = START_COLD
+        rsf = None
+    elif restart_file is None:
+        # Not specified a cold start, but no rsf given;
+        # Use fort.1.nc or fort.2.nc
+        rsf = latest_rsf(
+            [os.path.join(paths.run, x)
+             for x in ('fort.1.nc', 'fort.2.nc')])
+
+        if rsf is None:    # No fort files exist
+            start_type = START_COLD
+        else:
+            start_type = START_CHECKPOINT
+
+            # First checkpoint file should be the one we did NOT start from
+            leaf = os.path.split(rsf)
+            if leaf == 'fort.1.nc':
+                kdisk = 2
+            else:
+                kdisk = 1
+    else:
+        # User specified a restart_file; see what kind it is
+        rsf = os.path.abspath(restart_file)
+        start_type = rsf_type(rsf)
+
+    # Make sure the rsf file exists and seems OK
+    if rsf is not None:
+        with netCDF4.Dataset(rsf, 'r') as nc:
+            itime = nc.variables['itime'][:]
+            print('Restarting from {} (itime={}).'.format(rsf, itime))
+
+    if start_type == START_COLD:
         if (status.status >= launchers.STOPPED) and (not force):
             if not ectl.util.query_yes_no('Run is STOPPED; do you wish to overwrite and restart?', default='no'):
                 sys.exit(-1)
-
-    else:    # Continue a previous run
-        if status.status == launchers.FINISHED:
-            sys.stderr.write('Run is finished, cannot continue: {0}\n'.format(run))
-            sys.exit(-1)
+    # ---------------------------------
 
     modelexe = os.path.join(paths.run, 'pkg', 'bin', 'modelexe')
     _launcher = rundir.new_launcher(paths.run, launcher)
@@ -202,22 +282,29 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         # It replaces the following lines in MODELE.f:
         #          READ (iu_IFILE,NML=INPUTZ,ERR=900)
         #          if (coldRestart) READ (iu_IFILE,NML=INPUTZ_cold,ERR=900)
-        if _cold_start:
-            for pname,param in list(rd.params.items()):
-                if not isinstance(pname, tuple):
-                    continue
-                if pname[0] == 'INPUTZ_cold':
+        for pname,param in list(rd.params.items()):
+            if not isinstance(pname, tuple):
+                continue
+            if pname[0] == 'INPUTZ_cold':
+                if start_type == START_COLD:
                     new_pname = ('INPUTZ', pname[1])
                     param.pname = new_pname
                     rd.params[new_pname] = param
-                    del rd.params[pname]
+                del rd.params[pname]
 
-            # This is probably redundant.
-            rd.set(('INPUTZ', 'ISTART'), str(2))
+        # Set ISTART and restart file in I file
+        rd.set(('INPUTZ', 'ISTART'), str(start_type))
+        if start_type == START_RSF:
+            rd.set('AIC', rsf, type=rundeck.FILE)
+        elif start_type == START_CHECKPOINT:
+            rd.set('CHECKPOINT', rsf, type=rundeck.FILE)
 
-        # Do additional modifications to the rundeck
+        if kdisk is not None:
+            rd.set('KDISK', str(kdisk))
+
+        # Make additional modifications to the rundeck
         for rd_modify in rundeck_modifys:
-            rd_modify(rd, _cold_start)
+            rd_modify(rd, start_type == START_COLD)
         
         rundir.make_rundir(rd, paths.run)
 
@@ -241,12 +328,13 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
 
     # ------ Add modele to the command
     modele_cmd = [modelexe]
-#    if _cold_start:
+#    if start_type == START_COLD:
 #        modele_cmd.append('-cold-restart')
     modele_cmd.append('-i')
     modele_cmd.append('I')
 
     # ------- Run it!
+    sys.exit(0)
     _launcher(mpi_cmd, modele_cmd, np=ntasks, time=time, synchronous=synchronous)
     if not synchronous:
         _launcher.wait()

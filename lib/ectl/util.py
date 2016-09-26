@@ -1,6 +1,7 @@
 import sys
 from contextlib import contextmanager, closing
 import os
+import six.moves
 
 # http://stackoverflow.com/questions/3041986/apt-command-line-interface-like-yes-no-input
 def query_yes_no(question, default="yes"):
@@ -26,7 +27,7 @@ def query_yes_no(question, default="yes"):
 
     while True:
         sys.stdout.write(question + prompt)
-        choice = raw_input().lower()
+        choice = six.moves.input().lower()
         if default is not None and choice == '':
             return valid[default]
         elif choice in valid:

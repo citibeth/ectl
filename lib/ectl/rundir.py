@@ -14,6 +14,7 @@ import copy
 import subprocess
 import signal
 import time
+import netCDF4
 
 # TODO: Be careful not to leave around zero-length files when downloading
 
@@ -255,3 +256,4 @@ def all_rundirs(runs, recursive=False):
         doruns = [(run, ectl.rundir.Status(run)) for run in runs]
 
     return  doruns
+# ---------------------------------------------------

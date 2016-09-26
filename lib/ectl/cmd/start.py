@@ -9,4 +9,4 @@ def start(parser, args, unknown_args):
     if len(unknown_args) > 0:
         raise ValueError('Unkown arguments: %s' % unknown_args)
 
-    ectl.launch.run(args, cmd='start')
+    ectl.launch.run(args, 'start')

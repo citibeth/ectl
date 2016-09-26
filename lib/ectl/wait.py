@@ -19,7 +19,7 @@ import ectl.rundir
 import signal
 import time
 
-def wait(runs, recursive=False):
+def wait(runs, recursive=False, verbose=False):
 
     if isinstance(runs, str):
         runs = [runs]
@@ -46,7 +46,8 @@ def wait(runs, recursive=False):
         # Determine what is no longer running
         to_remove = set()
         for status in running:
-            print('status', status.sstatus)
+            if verbose:
+                print('status', status.sstatus)
             if status.refresh_status() != launchers.RUNNING:
                 print('{0}: {1}'.format(status.run, status.sstatus))
                 to_remove.add(status)

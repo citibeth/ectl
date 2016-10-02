@@ -1,4 +1,4 @@
-EMSF Change Guide
+ESMF Change Guide
 =================
 
 This section documents the routine changes to be made to modelE files

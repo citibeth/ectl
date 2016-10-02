@@ -39,8 +39,21 @@ Contents:
    domain_decomposition
    initialization
    polymorphism
-   fortran_gotchas
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Coding Guide
+
    coding_standards
+   emsf_change_guide
+   fortran_gotchas
+
+
+.. toctree::
+   :maxdepth: 0
+   :caption: Misc. Reference
+
+   changes
 
 
 

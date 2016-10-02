@@ -40,6 +40,7 @@ Contents:
    initialization
    polymorphism
    fortran_gotchas
+   coding_standards
 
 
 

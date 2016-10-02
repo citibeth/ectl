@@ -26,11 +26,22 @@ Contents:
 
 .. toctree::
    :maxdepth: 2
+   :caption: User's Guide
 
    introduction
    gettingstarted
    running
-..   advanced
+
+.. toctree::
+   :maxdepth: 2
+   :caption: ModelE Developer's Guide
+
+   domain_decomposition
+   initialization
+   polymorphism
+   fortran_gotchas
+
+
 
 
 Indices and tables

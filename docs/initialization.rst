@@ -1,2 +1,0 @@
-ModelE Initialization
-=====================

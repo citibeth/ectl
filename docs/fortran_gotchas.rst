@@ -131,3 +131,47 @@ Moral on Intent(Out)
 *Always be suspicious of intent(out) parameters.  If the parameter is
 an array or derived type, intent(out) is almost never correct.  Use
 intent(inout) instead.*
+
+
+Double Precision Constants
+--------------------------
+
+**Question:** Why do I get single precision answers from double
+precision variables?, and what are all those 'd0' doing?
+
+All numbers in the GCM should be accurate to the degree of their
+representation, however, many are not. This mostly stems from the
+automatic conversion that takes place when a single precision or
+integer number is converted to a double precision variable. In the
+following examples the double precision variables will only be
+accurate to 6 or so decimal places (instead of the 12 or so
+expected).
+
+.. code-block:: fortran
+
+   REAL*8 X
+   X = 0.1 =&gt; 0.10000000149011612
+   X = 1/3 =&gt; 0. (integer division)
+   X = 1./3. =&gt; 0.3333333432674408 
+   X = 1./3 =&gt; 0.3333333432674408 
+   X = 0.3333333333333333 =&gt; 0.3333333432674408 (!!!!)
+
+To get double precision results you must use 'd' ie. ``X=0.1d0``,
+``X=1d-1``, ``X=1d0/3d0`` or ``X=1./3d0`, or even ``X=1d0/3``.
+
+.. note::
+   * For decimals expressable exactly in binary formulation,
+     there are no problems, ie. ``X=0.5`` is the same as ``X=5d-1``.
+
+   * Where integer division is concerned, the integer is converted to
+     the type of the numerator (I think). Thus ``1./IM`` gives only
+     single precision.
+
+   * ``REAL*8 :: FIM = IM, BYIM = 1./FIM`` gives double precision,
+     since the denominator is already double precision).
+
+On some compilers, but not all, there is a compiler option (such as
+``-r8``) that removes these problems.  This is not standard Fortran.
+Hence for maximum portability we are trying to be explicit about
+writing out those ``d0`` indications.
+

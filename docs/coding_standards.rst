@@ -268,8 +268,8 @@ suffix, and warrant an exception from the usual naming convention for
 modules.  In most instances this convention is already consistent with
 the corresponding file name, but will eventually require a fix for th exceptions.
 
-Subsystem driver module \_DRV
-"""""""""""""""""""""""""""""
+Subsystem driver module _DRV
+""""""""""""""""""""""""""""
 
 In ModelE a consistent existing convention for most physical
 components is to have a top level file containing the suffix ``_DRV``.
@@ -648,6 +648,116 @@ for those parameters is a very high priority.
 
 .. attention:: All rundeck parameters *must* be documented using the
    comment tag ``!@dbparam``.
+
+Physical Units
+--------------
+
+Any time a parameter or variable is declared or assigned, the user may
+add a unit designation to it.  This designation may be used in a
+number of ways:
+
+#. It is informative to the user, making it easier to undersand the
+   physics involved in the code.
+
+#. Units assigned to constants are parsed, allowing export of the
+   physical constants set in ``Constants_mod.F90`` and other modules.
+   In this way, physical constants defined in ModelE may be used by
+   other non-Fortran programs (Python scripts that prepare ModelE
+   input files, for example).
+
+#. It is possible to build a static Fortran unit-checker, which could
+   automatically find unit errors in the Fortran code.
+
+Declaring Units
+^^^^^^^^^^^^^^^
+
+Units are declared on a variable by *putting them in square brackets* in
+a comment associated with that variable.  For example, they can go
+inside API-doc comments:
+
+.. code-block:: fortran
+
+   !@param shw heat capacity of water (at 20 C) [J kg-1 K-1]
+   real*8,parameter :: shw  = 4185.
+
+Units may be added to plain Fortran comments as well:
+
+.. code-block:: fortran
+
+   real(real64) :: dz_aver, fresh_snow_m        ! [m]
+
+Units may even be added to assignment expressions, indicating the
+expected unit of the assignment:
+
+.. code-block:: fortran
+
+    atmglas(ihp)%SNOW(I,J) = this%state%wsn(1, i,j,ihp)  ! [kg m-2]
+
+In all case, the simple rule is that *units are put in square brackets*.
+
+Unit Format
+^^^^^^^^^^^
+
+The format of unit declarations (what's inside the square brackets)
+must be parseable by the `UDUNITS-2
+<http://www.unidata.ucar.edu/software/udunits/udunits-current/doc/udunits/udunits2.html>`_
+package.  Unit strings are composed as a series of pairs of unit and
+exponent. If the exponent is positive, it is indicated with a carat,
+eg: 
+
+.. code-block:: console
+
+   [m^2]
+
+If the unit is negative, it is indicated with a minus sign, eg:
+
+.. code-block:: console
+
+   [m-2]
+
+Positive and negative exponents may be combined, eg:
+
+.. code-block:: console
+
+   [J kg^3 m-2]
+
+SI prefixes may be used on units, eg: "J", "MJ", "mJ", etc. A number of non-base units and non-SI units are also available, but are likely of little interest in ModelE.
+
+RECOMMENDATIONS
+"""""""""""""""
+
+* List all positive exponents before all negative exponents. 
+
+* For unitless quantities, the unit string ``[1]`` may be
+  used. Alternately, more "descriptive" strings may also be used, eg
+  ``[kg kg-1]`` if a quantity is a ration of masses.  Both will be the
+  same to UDUNITS.
+
+* In some cases, non-reduced unit strings may be appropriate. For
+  example, if ice is measured in meters of water equivalent ``[m]``,
+  rather than the SI standard ``[kg m-2]``, then the density of that ice
+  will be measured in ``[m m-1]``.
+
+* It is possible to use a slash instead of negative exponent. This is
+  not recommended, due to ambiguity. For example, ``[kg/s]`` is clear,
+  but ``[kg/s m]`` is not.
+
+* Use ``[K]`` for Kelvins, ``[degC]`` for degrees Celsius. 
+
+Available Units
+"""""""""""""""
+
+For a complete list of available units, see:
+
+* **Base Units:** `udunits2-base.xml <https://github.com/Unidata/UDUNITS-2/tree/master/lib/udunits2-base.xml>`_
+* **Derived Units:** `libudunits2-derived.xml <https://github.com/Unidata/UDUNITS-2/tree/master/libudunits2-derived.xml>`_
+* **Common:** `libudunits2-common.xml <https://github.com/Unidata/UDUNITS-2/tree/master/libudunits2-common.xml>`_
+* **Accepted:** `libudunits2-accepted.xml <https://github.com/Unidata/UDUNITS-2/tree/master/libudunits2-accepted.xml>`_
+* **SI Prefixes:** `udunits2-prefixes.xml <https://github.com/Unidata/UDUNITS-2/tree/master/lib/udunits2-prefixes.xml>`_
+
+.. note:: It is possible (in theory) to define our own units in
+   ModelE by creating more XML files of a similar nature.
+
 
 Miscellaneous
 -------------

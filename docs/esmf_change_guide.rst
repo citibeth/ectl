@@ -1,3 +1,5 @@
+.. _esmf_change_guide:
+
 ESMF Change Guide
 =================
 

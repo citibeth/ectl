@@ -36,14 +36,8 @@ Contents:
    :maxdepth: 2
    :caption: ModelE Developer's Guide
 
-   domain_decomposition
-   initialization
-   polymorphism
-
-.. toctree::
-   :maxdepth: 2
-   :caption: Coding Guide
-
+   configuring_modele
+   modele_structure
    coding_standards
    esmf_change_guide
    fortran_gotchas

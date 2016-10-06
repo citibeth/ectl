@@ -9,7 +9,7 @@ def setup_parser(subparser):
     subparser.add_argument('--restart-file', '-rsf', dest='restart_file', default=None,
         help="File to use for restart (fort.X.nc or .rsf file)")
 
-    subparser.add_argument('--restart-date', '-rsf', dest='restart_date', default=None,
+    subparser.add_argument('--restart-date', '-rsd', dest='restart_date', default=None,
         help="Find rsf file at or before given date")
 
 def run(parser, args, unknown_args):

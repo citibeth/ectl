@@ -58,6 +58,7 @@ def search_up(path, condition_fn):
         path = new_path
 
 def follow_link(linkname, must_exist=False):
+    """Finds what a link points to."""
     if not os.path.islink(linkname):
         return None
     fname = os.path.realpath(linkname)

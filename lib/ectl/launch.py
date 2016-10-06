@@ -11,6 +11,7 @@ import shutil
 from ectl import iso8601
 import datetime
 import netCDF4
+import collections
 
 def setup_parser(subparser):
     subparser.add_argument('run', nargs='?', default='.',
@@ -34,50 +35,6 @@ def parse_date(str):
         return None
     return iso8601.parse_date(str)
 
-def remake_dir(dir):
-    """Creates a directory, renaming the old one to <dir>.v???"""
-    if os.path.exists(dir):
-        print('EXISTS')
-        # Move to a '.vXX' name
-        root,leaf = os.path.split(dir)
-        dirRE = re.compile(leaf + r'\.v(\d+)')
-        max_v = 0
-        for fname in os.listdir(root):
-            match = dirRE.match(fname)
-            if match is not None:
-                v = int(match.group(1))
-                if v > max_v:
-                    max_v = v
-        next_fname = os.path.join(root, '%s.%02d' % (leaf, max_v+1))
-        print('next_fname', next_fname)
-        os.rename(dir, next_fname)
-
-    os.mkdir(dir)
-
-
-def make_vdir(dir):
-    """Creates a directory named <dir>XX, and symlinks <dir> to it."""
-
-    # Find the next 'vXXX' name to use
-    root,leaf = os.path.split(dir)
-    dirRE = re.compile(leaf + r'(\d+)')
-    max_v = 0
-    for fname in os.listdir(root):
-        match = dirRE.match(fname)
-        if match is not None:
-            v = int(match.group(1))
-            max_v = max(max_v, v)
-    next_fname = '%s%02d' % (leaf, max_v+1)
-    os.mkdir(os.path.join(root, next_fname))
-
-    # Create symlink log -> log.vXXX
-    try:
-        #shutil.rmtree(dir)
-        os.remove(dir)
-    except OSError:
-        pass
-    os.symlink(next_fname, dir)
-
 
 # ---------------------------------------------------
 def rsf_type(rsf):
@@ -92,35 +49,6 @@ def rsf_type(rsf):
             return START_RSF
 
 # ---------------------------------------------------
-def latest_rsf(rsfs, raise_missing=False):
-    """Finds the checkpoint (fort.X.nc) file with the later timestamp.
-    raise_missing:
-        If set, raise an exception on a missing file."""
-
-    max_itime = -1
-    max_rsf = None
-    for rsf in rsfs:
-        print('rsf=', rsf)
-
-        try:
-            nc = netCDF4.Dataset(rsf, 'r')
-        except:
-            # File failed to open
-            if raise_missing:
-                raise
-            else:
-                continue
-
-        # File is now open
-        try:
-            itime = nc.variables['itime'][:]
-            if itime > max_itime:
-                max_itime = itime
-                max_rsf = rsf
-        finally:
-            nc.close()
-
-    return max_rsf
 # ------------------------------------------------------
 def rd_set_ts(rd, cold_start, start_ts, end_ts):
     """Modifies the rundeck with start and end times."""
@@ -170,14 +98,14 @@ def run(args, cmd):
 # These are set to match corresponding ISTART values in ModelE
 # See MODELE.f
 START_COLD = 2        # Restart a run, no restart/checkpoint files
-START_CHECKPOINT = 14  # Restart from a fort.1.nc or fort.2.nc file
+START_CHECKPOINT = 14  # Restart from a fort.X.nc file
 START_RSF = 9         # Restart from an .rsf (AIC) file
 
 LATEST = object()    # Token
 COLD = object()
 
 def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(),
-    cold_start=False, restart_file=None,
+    cold_start=False, restart_file=None, restart_date=None,
     synchronous=False):
     """API call to start a ModelE execution.
 
@@ -204,18 +132,23 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         Block until ModelE is done running.  Usually good only for small tests.
     """
 
+    if restart_file is not None and restart_date is not None:
+        raise ValueError('Cannot simultaneously set restart_file and restart_date.')
     if launcher is None:
         launcher = os.environ.get('ECTL_LAUNCHER', None)
     if launcher is None:
         raise ValueError('No launcher specified.  Please use --launcher command line option, or set the ECTL_LAUNCHER environment variable.  Valid values are mpi, slurm and slurm-debug.')
 
+    # Obtain restart_file from restart_date
+    if restart_date is not None:
+        raise NotImplementedError('Obtain restart_file from restart_date')
 
     # Check arguments
     if restart_file is not None:
         if not os.path.exists(restart_file):
             raise ValueError('Specified restart file does not exist: %s' % restart_file)
         if cold_start:
-            raise ValueError('Cannot specify a colde start and rsf file together.')
+            raise ValueError('Cannot specify a cold start and rsf file together.')
 
     paths = rundir.FollowLinks(run)
     status = rundir.Status(paths.run)
@@ -225,51 +158,102 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         raise ValueError('Run is already running: {0}\n'.format(run))
 
     # --------- Determine start type (start_type) and restart file (rsf)
-    if cold_start and (restart_file is not None):
-        raise ValueError('Cannot use restart file file on a cold start.')
 
-    kdisk = None    # First fort.X.nc file to write
+    # Determine status of fort files, and their max
+    forts = rundir.forts_status(paths.run)
+
+    # Don't put up with any corrupt fort files!
+    ncorrupt = sum([x.status==rundir.RSF_CORRUPT for x in forts])
+    if ncorrupt > 0:
+        print('Corrupt fort.X.nc files detected, cannot launch ModelE:')
+        for fort in [x for x in forts if x.status==rundir.RSF_CORRUPT]:
+            print('   {}'.format(fort.rsf))
+        raise ValueError('Corrupt fort.X.nc file(s) detected.')
+
+
+    good_forts = [x for x in forts if x.status==rundir.RSF_GOOD]
+    missing_forts = [x for x in forts if x.status==rundir.RSF_MISSING]
+    ngood = len(good_forts)
+    nmissing = len(missing_forts)
+
+
+    kdisk_preferred0 = None    # First fort.X.nc file to write, if both already exist
     if cold_start:
+        # User requested a cold start
+        # Always write fort.1.nc first on cold start; be predictable
         start_type = START_COLD
+        kdisk=1
         rsf = None
     elif restart_file is None:
-        # Not specified a cold start, but no rsf given;
-        # Use fort.1.nc or fort.2.nc
-        rsf = latest_rsf(
-            [os.path.join(paths.run, x)
-             for x in ('fort.1.nc', 'fort.2.nc')])
+        # User requested a warm start but did not give a rsf file.
 
-        if rsf is None:    # No fort files exist
+        if ngood == 0:
+            # No fort files anywhere, do a cold start.
             start_type = START_COLD
+            kdisk=1
+            rsf = None
         else:
+            # Print out existing fort files
+            print('Choosing from fort files:')
+            for f in good_forts:
+                print('  {}: itime={}'.format(f.rsf, f.itime))
+
+            # Find most recent fort file
+            max_fort = max(good_forts, key=lambda x : x.itime)
+            rsf = max_fort.rsf
             start_type = START_CHECKPOINT
 
-            # First checkpoint file should be the one we did NOT start from
-            leaf = os.path.split(rsf)
-            if leaf == 'fort.1.nc':
-                kdisk = 2
+            # The first checkpoint file should be the one we started from.    
+            # See note in MODELE.f:
+            # ! Keep KDISK after reading from the later restart file, so that
+            # ! the same file is overwritten first; in case of trouble,
+            # ! the earlier restart file will still be available
+            other_fort = forts[1-(max_fort.kdisk-1)]
+            if other_fort.status == rundir.RSF_MISSING:
+                kdisk = other_fort.kdisk
             else:
-                kdisk = 1
+                kdisk = max_fort.kdisk
     else:
-        # User specified a restart_file; see what kind it is
+        # User specified a restart_file.
+
+        # See what kind it is
         rsf = os.path.abspath(restart_file)
         start_type = rsf_type(rsf)
 
-    # Make sure the rsf file exists and seems OK
-    if rsf is not None:
-        with netCDF4.Dataset(rsf, 'r') as nc:
-            itime = nc.variables['itime'][:]
-            print('Restarting from {} (itime={}).'.format(rsf, itime))
+        # Decide on which checkpoint file to write first in the run.
+        if ngood == len(forts):
+            # We have to overwrite a file; write to the oldest
+            min_fort = min(good_forts, key=lambda x : x.itime)
+        else:
+            # At least one fort file does not exist; write to that slot.
+            min_fort = min(missing_forts, key=lambda x : x.kdisk)
+        print('good_forts', good_forts)
+        kdisk = min_fort.kdisk
 
+    # Make sure the rsf file exists and seems OK
+    # Print status
     if start_type == START_COLD:
         if (status.status >= launchers.STOPPED) and (not force):
             if not ectl.util.query_yes_no('Run is STOPPED; do you wish to overwrite and restart?', default='no'):
                 sys.exit(-1)
+
+        print('***** Cold Start')
+        print('First checkpoint file will be fort.{}.nc'.format(kdisk))
+    else:
+        print('***** Warm Start')
+        with netCDF4.Dataset(rsf, 'r') as nc:
+            itime = nc.variables['itime'][:]
+            print('Restarting from {} (itime={}).'.format(rsf, itime))
+        print('First checkpoint file will be fort.{}.nc'.format(kdisk))
+
     # ---------------------------------
 
     modelexe = os.path.join(paths.run, 'pkg', 'bin', 'modelexe')
     _launcher = rundir.new_launcher(paths.run, launcher)
-    log_dir = os.path.join(paths.run, 'log')
+
+    # -------- Determine log file(s)
+    # Get non-symlinked log direcotry
+    log_dir = pathutil.make_vdir(os.path.join(paths.run, 'log'))
 
     # ------- Load the rundeck and rewrite the I file (and symlinks)
     try:
@@ -297,22 +281,23 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         if start_type == START_RSF:
             rd.set('AIC', rsf, type=rundeck.FILE)
         elif start_type == START_CHECKPOINT:
-            rd.set('CHECKPOINT', rsf, type=rundeck.FILE)
+            rd.set('fort.4.nc', rsf, type=rundeck.FILE)
 
-        if kdisk is not None:
-            rd.set('KDISK', str(kdisk))
+        rd.set('KDISK', str(kdisk))
 
         # Make additional modifications to the rundeck
         for rd_modify in rundeck_modifys:
             rd_modify(rd, start_type == START_COLD)
         
-        rundir.make_rundir(rd, paths.run)
+        rundir.make_rundir(rd, paths.run, idir=log_dir)
 
     except IOError:
         print('Warning: Cannot load rundeck.R.  NOT rewriting I file')
 
     # -------- Construct the main command line
     mpi_cmd = ['mpirun', '-timestamp-output']
+    mpi_cmd.append('-output-filename')
+    mpi_cmd.append(os.path.join(log_dir, 'q'))
 
     # ------- Delete timestamp.txt
     try:
@@ -320,11 +305,6 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
     except:
         pass
 
-    # -------- Determine log file(s)
-    if log_dir != '-':
-        make_vdir(log_dir)
-        mpi_cmd.append('-output-filename')
-        mpi_cmd.append(os.path.join(log_dir, 'q'))
 
     # ------ Add modele to the command
     modele_cmd = [modelexe]
@@ -334,7 +314,6 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
     modele_cmd.append('I')
 
     # ------- Run it!
-    sys.exit(0)
     _launcher(mpi_cmd, modele_cmd, np=ntasks, time=time, synchronous=synchronous)
     if not synchronous:
         _launcher.wait()

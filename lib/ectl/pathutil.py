@@ -1,5 +1,6 @@
 from __future__ import print_function
 import os
+import re
 
 # http://code.activestate.com/recipes/52224-find-a-file-given-a-search-path/
 def search_file(filename, search_path):
@@ -76,3 +77,49 @@ class ChangePythonPath(object):
         sys.path = self.new_path
     def __exit__(self, type, value, traceback):
         sys.path = self.old_path
+
+def remake_dir(dir):
+    """Creates a directory, renaming the old one to <dir>.v???"""
+    if os.path.exists(dir):
+        print('EXISTS')
+        # Move to a '.vXX' name
+        root,leaf = os.path.split(dir)
+        dirRE = re.compile(leaf + r'\.v(\d+)')
+        max_v = 0
+        for fname in os.listdir(root):
+            match = dirRE.match(fname)
+            if match is not None:
+                v = int(match.group(1))
+                if v > max_v:
+                    max_v = v
+        next_fname = os.path.join(root, '%s.%02d' % (leaf, max_v+1))
+        os.rename(dir, next_fname)
+
+    os.mkdir(dir)
+
+
+def make_vdir(dir):
+    """Creates a directory named <dir>XX, and symlinks <dir> to it."""
+
+    # Find the next 'vXXX' name to use
+    root,leaf = os.path.split(dir)
+    dirRE = re.compile(leaf + r'(\d+)')
+    max_v = 0
+    for fname in os.listdir(root):
+        match = dirRE.match(fname)
+        if match is not None:
+            v = int(match.group(1))
+            max_v = max(max_v, v)
+    next_fname = '%s%02d' % (leaf, max_v+1)
+    ret = os.path.join(root, next_fname)
+    os.mkdir(ret)
+
+    # Create symlink log -> log.vXXX
+    try:
+        #shutil.rmtree(dir)
+        os.remove(dir)
+    except OSError:
+        pass
+    os.symlink(next_fname, dir)
+
+    return ret

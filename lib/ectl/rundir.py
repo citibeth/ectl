@@ -1,6 +1,7 @@
 import ectl
 import ectl.rundeck
 
+import collections
 import re
 import sys
 import os
@@ -100,7 +101,10 @@ def write_I(preamble, sections, fname):
         out.write('\n/\n')
 
 
-def make_rundir(rd, rundir):
+def make_rundir(rd, rundir, idir=None):
+    """idir:
+        Write the I file to this directory, and symlink to rundir"""
+
     ret = True
 
     sections = ectl.rundeck.ParamSections(rd)
@@ -127,7 +131,11 @@ def make_rundir(rd, rundir):
         os.symlink(fname, os.path.join(rundir, label))
 
     # Write them out to the I file
-    write_I(rd.preamble, sections, os.path.join(rundir, 'I'))
+    if idir is not None:
+        write_I(rd.preamble, sections, os.path.join(idir, 'I'))
+        os.symlink(os.path.join(idir, 'I'), os.path.join(rundir, 'I'))
+    else:
+        write_I(rd.preamble, sections, os.path.join(rundir, 'I'))
 
 
 def read_launch_txt(run):
@@ -256,4 +264,48 @@ def all_rundirs(runs, recursive=False):
         doruns = [(run, ectl.rundir.Status(run)) for run in runs]
 
     return  doruns
+# ---------------------------------------------------
+RSF_CORRUPT = 'RSF_CORRUPT'
+RSF_MISSING = 'RSF_MISSING'
+RSF_GOOD = 'RSF_GOOD'
+
+RsfStatus = collections.namedtuple('Status', ('rsf', 'kdisk', 'status', 'itime'))
+
+def rsf_status(rsf, kdisk):
+    """Gets the timestamp of a rstart/checkpoint file.
+    Returns: (rsf, status, itime)
+        status in (RSF_MISSING, RSF_CORRUPT, RSF_GOOD)
+    """
+
+    if not os.path.exists(rsf):
+        return RsfStatus(rsf, kdisk, RSF_MISSING, None)
+
+    nc = None
+    try:
+        nc = netCDF4.Dataset(rsf, 'r')
+        itime = nc.variables['itime'][:]
+    except:
+        # File failed to open or could not be read
+        return RsfStatus(rsf, kdisk, RSF_CORRUPT, None)
+
+    finally:
+        # Don't catch error on close; we don't know what's going on!
+        nc.close()
+
+    return RsfStatus(rsf, kdisk, RSF_GOOD, itime)
+
+
+# ---------------------------------------------------
+def forts_status(run):
+    """Returns a list RsfStatus records for the fort.1.nc and fort.2.nc files."""
+    return [rsf_status(os.path.join(run, 'fort.%d.nc' % kdisk), kdisk) for kdisk in range(1,3)]
+
+def newest_fort(run):
+    """Name of the most recent (existing) fort.X.nc file in a rundir."""
+    return max([x for x in forts_status(run) if x.status==RSF_GOOD], key=lambda x : x.itime)
+
+def oldest_fort(run):
+    """Name of the least recent (existing) fort.X.nc file in a rundir."""
+    return max([x for x in forts_status(run) if x.status==RSF_GOOD], key=lambda x : x.itime)
+
 # ---------------------------------------------------

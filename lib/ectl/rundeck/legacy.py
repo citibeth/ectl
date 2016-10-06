@@ -61,7 +61,7 @@ def preprocessor(fname, search_path):
                     yield Line(fname, source_lineno, line)
                     source_lineno += 1
                 else:
-                    leaf1 = match.group(1).decode()
+                    leaf1 = match.group(1)
                     fname1 = find_in_path(leaf1, search_path)
                     yield Line(fname, source_lineno, '! ---------- BEGIN #include %s\n' % fname1.encode())
                     for line in preprocessor(fname1, search_path):

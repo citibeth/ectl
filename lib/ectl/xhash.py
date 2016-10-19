@@ -2,6 +2,8 @@ import hashlib
 import pickle
 import types
 
+# TODO: This looks an awful lot like giss.checksum....
+
 def _update_int(myint, hash):
     hash.update(str(myint).encode())
 

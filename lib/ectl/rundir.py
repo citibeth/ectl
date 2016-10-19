@@ -1,5 +1,5 @@
 import ectl
-import ectl.rundeck
+from ectl import rundeck
 
 import collections
 import re
@@ -107,7 +107,7 @@ def make_rundir(rd, rundir, idir=None):
 
     ret = True
 
-    sections = ectl.rundeck.ParamSections(rd)
+    sections = rundeck.ParamSections(rd)
 
     # ------- Make the rundir
     try:
@@ -308,4 +308,5 @@ def oldest_fort(run):
     """Name of the least recent (existing) fort.X.nc file in a rundir."""
     return max([x for x in forts_status(run) if x.status==RSF_GOOD], key=lambda x : x.itime)
 
+# ---------------------------------------------------
 # ---------------------------------------------------

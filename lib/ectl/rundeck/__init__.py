@@ -83,11 +83,65 @@ def replace_date(dd, suffix, result):
         pass
 
 # ----------------------------------------------------------
+def parse_rundeck_value(sval):
+    """Returns the value, parsed by ModelE conventions.
+
+          - If single-quoted strings are present, then strings are
+            inferred.  Eg:
+               NAME='Alice'
+               NAMES='Alice','Bob','Charlie'
+
+          - Else if decimal points are present, then ``real*8`` is
+            inferred.  Eg:
+               GRAV=9.8
+               THICKNESSES=1.1,3.0
+
+          - Else integer is inferred.  Eg:
+               NSTEP=3
+               NLAYERS=4,6,5
+    """
+    if not isinstance(sval, str):
+        return sval    # Already parsed
+
+    ret = list()
+    svals = sval.split(',')
+
+    # Gather info about the different parts
+    nstrings = 0
+    ndecimals = 0
+    for sv in svals:
+        if sv[0] == "'" and sv[-1] == "'":
+            nstrings += 1
+        elif '.' in sv:
+            ndecimals += 1
+
+    # Parse differently based on types inferred
+    if nstrings > 0:
+        if nstrings < len(svals):
+            raise ValueError('Either all or no values must be quoted in: {}'.format(sval))
+        ret = [x[1:-1] for x in svals]
+    elif ndecimals > 0:
+        ret = [float(x) for x in svals]
+    else:
+        ret = list()
+        for sv in svals:
+            star = sv.find('*')
+            if star >= 0:
+                xrepeat = int(sv[:star])
+                xval = int(sv[star+1:])
+                ret += xrepeat * [xval]
+            else:
+                ret.append(int(sv))
+
+    # Unbox if a single item
+    return ret[0] if len(ret) == 1 else ret
+
+# ----------------------------------------------------------
 class Param(object):
     def __init__(self, pname, type, value, line=None):
         self.pname = pname
         self.type = type
-        self.value = value
+        self.value = value    
         self.lines = [line]    # Info on where this came from: line number, filename, raw line, etc.
         self.rval = None    # Resolved value (i.e. full pathname)
 
@@ -97,6 +151,10 @@ class Param(object):
                 raise ValueError('Values of type DATETYPE must have Python type datetime.datetime')
             if (dt.tzinfo is not None):
                 raise ValueError('Values of type DATETYPE cannot have a timezone.  Error in: {0}'.format(dt))
+
+    @property
+    def parsed(self):
+        return parse_rundeck_value(self.value)
 
     @property
     def line(self):
@@ -291,7 +349,7 @@ class Rundeck(object):
         self.resolve = self.params.resolve
 
     def __getitem__(self, key):
-        return self.params[key].value
+        return self.params[key]
 
     def __setitem__(self, key, value):
         self.params.set(key, value)
@@ -488,5 +546,15 @@ class ParamSections(object):
                     line = '{0}={1},'.format(pname[1],param.value)
                     iz.append(line)
 
+# ---------------------------------------------------
+def load_I(fname):
+    """Loads an I-file, returns a RunDeck"""
+    rd = Rundeck()
+    fin = legacy.preprocessor(fname, [])
+    lrd = legacy.LegacyRundeck(fin)    # Auto-closes
+    rd.add_legacy(lrd)
+    return rd
 
-
+#def rundeck_to_dict(rd):
+#    """Converts a rundeck to a standard dict."""
+#    return {key : param.value for key, param in rd.params.items()}

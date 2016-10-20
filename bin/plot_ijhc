@@ -1,0 +1,45 @@
+#!/usr/bin/env python3
+#
+# Makes a plot of a single IJHC in a ModelE run.
+
+import modele.io
+from giss.xaccess import *
+from giss.functional import *
+from giss import xaccess,functional
+import sys
+import numpy as np
+from giss import ncutil
+import argparse
+import matplotlib
+import giss.basemap
+
+# --------------------------------------------------
+# ------ Parse Input Parameters
+
+parser = argparse.ArgumentParser(description='Plot an IJHC variable out of a ModelE run.')
+parser.add_argument('run', help='Directory of run to plot from')
+parser.add_argument('var', help='Variable to plot')
+parser.add_argument('year_month', help='Month to plot (YYYY-MM)')
+
+args = parser.parse_args()
+dttuple = tuple(int(x) for x in args.year_month.split('-'))
+
+# --------------------------------------------------
+# ------- Fetch the data
+fetcher = bind(modele.io.fetch_rundir,
+    args.run, 'ijhc', _arg(0), *dttuple, 'ec', *_ix[:], region='greenland')
+
+# Can do expressions on variables her if you like.
+fetch = fetcher(args.var)
+
+pp = modele.io.plot_params(fetch)
+
+# Modify the plot here...
+
+# ---------- Plot it!
+figure = matplotlib.pyplot.figure(figsize=(8.5,11))
+ax = figure.add_subplot(111)
+basemap = giss.basemap.greenland_laea(ax=ax)
+giss.plot.plot_var(ax=ax, basemap=basemap, **pp)
+matplotlib.pyplot.show()
+#figure.savefig('fig.png', dpi=100, transparent=False)

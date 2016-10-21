@@ -513,7 +513,7 @@ class ParamSections(object):
         self.inputz_cold = []
 
         # Organize self.parameters into ModelE sections
-        dtsrc = float(rd['DTsrc'])
+        dtsrc = float(rd['DTsrc'].value)
         for param in sorted(list(rd.params.values())):
             pname = param.pname
             if isinstance(pname, str):    # Non-compound name

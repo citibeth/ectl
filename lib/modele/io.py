@@ -113,8 +113,9 @@ class scaleacc(object):
 
     def __call__(self):
         try:
-            os.path.makedirs(self.odir)
-        except:
+            os.makedirs(self.odir)
+        except Exception as e:
+            # print(e)
             pass
         with ioutil.pushd(self.odir):
             cmd = ['scaleacc', self.inputs[0], self.section]

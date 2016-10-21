@@ -20,6 +20,8 @@ parser = argparse.ArgumentParser(description='Plot an IJHC variable out of a Mod
 parser.add_argument('run', help='Directory of run to plot from')
 parser.add_argument('var', help='Variable to plot')
 parser.add_argument('year_month', help='Month to plot (YYYY-MM)')
+parser.add_argument('--range', dest='range',
+    help='Lower and upper bounds for colorbar')
 
 args = parser.parse_args()
 dttuple = tuple(int(x) for x in args.year_month.split('-'))
@@ -42,4 +44,4 @@ ax = figure.add_subplot(111)
 basemap = giss.basemap.greenland_laea(ax=ax)
 giss.plot.plot_var(ax=ax, basemap=basemap, **pp)
 matplotlib.pyplot.show()
-#figure.savefig('fig.png', dpi=100, transparent=False)
+figure.savefig('fig.png', dpi=100, transparent=False)

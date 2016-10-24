@@ -56,6 +56,7 @@ def check_ldd(exe_fname):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     nstderr = 0
     for line in proc.stderr:
+        line = line.decode()    # Convert bytes --> str
         sys.stderr.write(line)
         nstderr += 1
 

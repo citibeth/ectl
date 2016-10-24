@@ -53,7 +53,7 @@ def set_link(src, dst):
     os.symlink(src_rel, dst)
 
 
-def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None):
+def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True):
 
     # Move parameters to different name to maintain SSA coding style below.
     args_run = run
@@ -231,7 +231,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None)
             # If any of these files needs to change, we expect the user to
             # edit the pyar file.
             with ectl.util.working_dir(src):
-                if os.path.exists(MODELE_CONTROL_PYAR) and not os.path.exists('CMakeLists.txt'):
+                if unpack and os.path.exists(MODELE_CONTROL_PYAR):
                     print('Adding files from modele-control.pyar')
                     with open(MODELE_CONTROL_PYAR) as fin:
                         pyar.unpack_archive(fin, '.')
@@ -265,9 +265,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None)
                         '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
                         src]
 
-                    env = dict(os.environ)
-                    del env['PYTHONPATH']    # Python2 in CMake build does its own thing
-                    subprocess.check_call(cmd, env=env)
+                    subprocess.check_call(cmd)
                 except OSError as err:
                     sys.stderr.write(' '.join(cmd) + '\n')
                     sys.stderr.write('%s\n' % err)

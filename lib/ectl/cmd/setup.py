@@ -36,7 +36,8 @@ def setup_parser(subparser):
         help='Name package dir after build dir.')
     subparser.add_argument('--rebuild', action='store_true', dest='rebuild', default=False,
         help='Rebuild the package, even if it seems to be fine.')
-
+    subparser.add_argument('--no-unpack', action='store_false', dest='unpack', default=True,
+        help="Don't unpack the build system from pyar.")
     subparser.add_argument('--jobs', '-j', action='store', dest='jobs',
         help='Number of cores to use when building.')
 
@@ -49,4 +50,4 @@ def setup(parser, args, unknown_args):
     ectl.setup.setup(
         args.run, rundeck=args.rundeck, src=args.src,
         jobs=None if args.jobs is None else int(args.jobs),
-        pkgbuild=args.pkgbuild, rebuild=args.rebuild)
+        pkgbuild=args.pkgbuild, rebuild=args.rebuild, unpack=args.unpack)

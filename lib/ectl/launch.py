@@ -22,7 +22,7 @@ def setup_parser(subparser):
         default=False,
         help='Overwrite run without asking (on start)')
     subparser.add_argument('-l', '--launcher', action='store', dest='launcher',
-        help='How to run the program')
+        help='How to run the program: mpi, slurm, slurm-debug')
 
     # -------- Arguments for SOME launchers
     subparser.add_argument('-np', '--ntasks', '-n', action='store', dest='np',

@@ -231,7 +231,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None)
             # If any of these files needs to change, we expect the user to
             # edit the pyar file.
             with ectl.util.working_dir(src):
-                if os.path.exists(MODELE_CONTROL_PYAR):
+                if os.path.exists(MODELE_CONTROL_PYAR) and not os.path.exists('CMakeLists.txt'):
                     print('Adding files from modele-control.pyar')
                     with open(MODELE_CONTROL_PYAR) as fin:
                         pyar.unpack_archive(fin, '.')
@@ -265,7 +265,9 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None)
                         '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
                         src]
 
-                    subprocess.check_call(cmd)
+                    env = dict(os.environ)
+                    del env['PYTHONPATH']    # Python2 in CMake build does its own thing
+                    subprocess.check_call(cmd, env=env)
                 except OSError as err:
                     sys.stderr.write(' '.join(cmd) + '\n')
                     sys.stderr.write('%s\n' % err)

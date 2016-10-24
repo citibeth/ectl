@@ -190,8 +190,8 @@ class Params(dict):
         if line is not None:
             line.param = param
 
-        # Full pathnames are already resolved...
-        if (type == FILE) and (len(os.path.split(value)[0]) > 0):
+        # Absolute pathnames are already resolved...
+        if (type == FILE) and (value[0] == '/'):
             param.rval = param.value
 
         return param

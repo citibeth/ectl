@@ -143,12 +143,13 @@ class SlurmLauncher(object):
 
             proc = subprocess.Popen(sbatch_cmd,
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            (sout, serr) = proc.communicate('\n'.join([
+            batch_script = '\n'.join([
                 '#!/bin/sh',
                 '#',
                 '',
-                cmd_str]))
-            match = submittedRE.match(sout)
+                cmd_str])
+            (sout, serr) = proc.communicate(batch_script.encode())
+            match = submittedRE.match(sout.decode())
             sjobid = match.group(1)
 
             # Write the launch file
@@ -167,9 +168,9 @@ class SlurmLauncher(object):
         cmd = ['scontrol', 'show', 'jobid', '-dd', launch_txt['jobid']]
         (scontrol_txt, scontrol_err) = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE).communicate()
         # Invalid Job ID: This job is long gone...
-        if invalidJobRE.match(scontrol_err) is not None:
+        if invalidJobRE.match(scontrol_err.decode()) is not None:
             return None
-        scontrol_dict = parse_scontrol(scontrol_txt)
+        scontrol_dict = parse_scontrol(scontrol_txt.decode())
 
         JobState = scontrol_dict['JobState']    
         return slurm_state_translation.get(JobState, None)

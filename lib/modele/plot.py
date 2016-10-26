@@ -17,6 +17,8 @@
 import numpy as np
 import numpy.ma as ma
 import giss.plot
+from icebin import ibplotter
+
 
 # ====================================================================
 
@@ -228,3 +230,62 @@ def plot_params(var_name='', nc=None, val=None, plotter=None) :
     info['plot_boundaries'] = _default_plot_boundaries
 
     return info
+
+# ------------------------------------------------
+# --- Support for io.py
+# ----------------------------------------------------------
+# Args: icebin_config, ice_sheet, IvE=None):
+PlotterE = memoize.local()(ibplotter.PlotterE)
+# Memoize so we can compare plotters by ID
+guess_plotter = memoize.local()(modele.plot.guess_plotter)
+
+def get_plotter(attrs, region=None):
+    """Produces a plotter based on the meta-data that came with a variable.
+    region:
+        Parameter required if getting a local-area plotter"""
+
+    grid = attrs[('fetch', 'grid')]
+    if grid == 'atmosphere':
+        plotter = modele.plotters.guess_plotter(attrs[('fetch', 'shape')])
+    elif grid == 'elevation':
+        icebin_in = attrs[('param', '_file_icebin_in')]
+        plotter = PlotterE(icebin_in, region)
+    else:
+        raise ValueError('Unknown grid type: %s' % grid)
+
+    return plotter
+
+_zero_centered = {'impm', 'evap_lndice', 'evap', 'imph_lndice', 'impm_lndice', 'netht_lndice', 'trht_lndice'}#, 'sensht_lndice'} #, 'trht_lndice'}
+
+_reverse_scale = {'impm', 'impm_lndice'}
+
+def plot_params(fetch):
+    """Adds some ModelE-specific stuff to xaccess.plot_params()"""
+
+    attrs = fetch.attrs()
+    pp = xaccess.plot_params(fetch)
+ 
+    var_name = pp.get('var_name', None)
+    plot_args = pp['plot_args']
+    cb_args = pp['cb_args']
+
+    # Convert result to double precision if needed;
+    # Plot functions don't work with single precision
+    if attrs[('fetch', 'dtype')] != np.float:
+        pp['val'] = pp['val'].astype(np.float)
+
+    if var_name in _zero_centered :
+
+        plot_args['norm'] = giss.plot.AsymmetricNormalize()
+        reverse = (var_name in _reverse_scale)
+        plot_args['cmap'] = giss.plot.cpt('giss-cpt/BlRe.cpt', reverse=reverse).cmap
+        plot_args['vmin'] = np.nanmin(pp['val'])
+        plot_args['vmax'] = np.nanmax(pp['val'])
+        cb_args['ticks'] = [plot_args['vmin'], 0, plot_args['vmax']]
+        cb_args['format'] = '%0.2f'
+
+    year,month = attrs[('fetch', 'date')]
+    pp['title'] = pp['title'] + (' %04d-%02d' % (year, month))
+
+    return pp
+   

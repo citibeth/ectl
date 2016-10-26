@@ -10,15 +10,11 @@ import numpy as np
 import netCDF4
 import cf_units
 
-from giss import memoize,ioutil,ncutil,giutil,xaccess
+from giss import memoize,ioutil,ncutil,giutil,xaccess,gidate
 from giss.functional import *
 from giss.xaccess import *
 
-from icebin import ibplotter
-
 from ectl import rundeck
-import modele.plot
-import giss.plot
 
 """Stuff having to do with output files of ModelE (i.e. acc files,
 results of scaleac, etc."""
@@ -87,17 +83,20 @@ def read_topo(topo_file):
 @memoize.files()
 class scaleacc(object):
     hash_version = 0
-    def __init__(self, ofpat, section, accdir=None):
-        """
-        ofpat:
+    def __init__(self, _ofpat, section, accdir=None, params=dict()):
+        """ofpat:
             Pattern to use for the output file name.
             Eg: /home/me/JUN1951.{section}E4F40.R.nc
         section:
             Section of ACC file we want (eg: 'aij', 'ijhc', etc)
         accdir:
-            Directory to find corresponding acc files (if needed)"""
+            Directory to find corresponding acc files (if needed)
+        params:
+            Additional attributes to add to the params variable in the
+            output NetCDF file (will not ovewrite).
+        """
 
-
+        ofpat = os.path.abspath(_ofpat)
         self.odir,leafpat = os.path.split(ofpat)
         ofname = os.path.join(self.odir,
             leafpat.format(section=section))
@@ -105,6 +104,7 @@ class scaleacc(object):
             leafpat.format(section='acc'))
 
         self.section = section
+        self.params = params
 
         # Required by @memoize.files()
         self.inputs = [ifname]
@@ -131,6 +131,10 @@ class scaleacc(object):
             with netCDF4.Dataset(ofname, 'w') as ncout:
 
                 oparam = ncout.createVariable('param', 'i')
+
+                # Copy our default parameters
+                for key,val in self.params.items():
+                    oparam.setncattr(key, val)
 
                 # Copy metadata from ACC file
                 with netCDF4.Dataset(self.inputs[0], 'r') as accin:
@@ -228,31 +232,9 @@ def fetch(file_name, var_name, *index, region=None):
     if region is not None:
         plotter_kwargs['region'] = region
     attrs[('plotter', 'kwargs')] = plotter_kwargs
-    attrs[('plotter', 'function')] = get_plotter
+    attrs[('plotter', 'function')] = ('modele.plot', 'get_plotter') # Name of function
 
     return ncutil.FetchTuple(attrsW, bind(ncutil.ncdata, file_name, var_name, *xindex, **kwargs))
-
-# ----------------------------------------------------------
-# Args: icebin_config, ice_sheet, IvE=None):
-PlotterE = memoize.local()(ibplotter.PlotterE)
-# Memoize so we can compare plotters by ID
-guess_plotter = memoize.local()(modele.plot.guess_plotter)
-
-def get_plotter(attrs, region=None):
-    """Produces a plotter based on the meta-data that came with a variable.
-    region:
-        Parameter required if getting a local-area plotter"""
-
-    grid = attrs[('fetch', 'grid')]
-    if grid == 'atmosphere':
-        plotter = modele.plotters.guess_plotter(attrs[('fetch', 'shape')])
-    elif grid == 'elevation':
-        icebin_in = attrs[('param', '_file_icebin_in')]
-        plotter = PlotterE(icebin_in, region)
-    else:
-        raise ValueError('Unknown grid type: %s' % grid)
-
-    return plotter
 
 
 # -----------------------------------------
@@ -262,7 +244,7 @@ months_atoi = {s:i for i,s in enumerate(months_itoa)}
 _accRE = re.compile(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d\d\d\d)\.acc(.*?)\.nc')
 
 @memoize.local()
-class _Rundir(object):
+class Rundir(object):
     def __init__(self, run):
         self.accdir = run
         self.month_files_dict = {}    # (year, month) : fname
@@ -282,7 +264,7 @@ class _Rundir(object):
             month = months_atoi[match.group(1)]
             year = int(match.group(2))
             fname = os.path.join(self.accdir, leaf)
-            self.month_files_dict[(year, month)] = fname
+            self.month_files_dict[gidate.Date(year, month)] = fname
 
         self.month_files = sorted(
             (dttuple, fname)
@@ -303,7 +285,7 @@ def fetch_rundir(run, section, var_name, year, month, *index, **kwargs):
     """Fetches data out of a rundir, treating the entire rundir like a dataset.
     run:
         A ModelE run directory."""
-    rundir = _Rundir(os.path.realpath(run))
+    rundir = Rundir(os.path.realpath(run))
     #scaled = os.path.join(run, 'scaled')
 
     scaled_fname = scaleacc(
@@ -316,37 +298,3 @@ def fetch_rundir(run, section, var_name, year, month, *index, **kwargs):
 
     return ret
 
-_zero_centered = {'impm', 'evap_lndice', 'evap', 'imph_lndice', 'impm_lndice', 'netht_lndice', 'trht_lndice'}#, 'sensht_lndice'} #, 'trht_lndice'}
-
-_reverse_scale = {'impm', 'impm_lndice'}
-
-def plot_params(fetch):
-    """Adds some ModelE-specific stuff to xaccess.plot_params()"""
-
-    attrs = fetch.attrs()
-    pp = xaccess.plot_params(fetch)
- 
-    var_name = pp.get('var_name', None)
-    plot_args = pp['plot_args']
-    cb_args = pp['cb_args']
-
-    # Convert result to double precision if needed;
-    # Plot functions don't work with single precision
-    if attrs[('fetch', 'dtype')] != np.float:
-        pp['val'] = pp['val'].astype(np.float)
-
-    if var_name in _zero_centered :
-
-        plot_args['norm'] = giss.plot.AsymmetricNormalize()
-        reverse = (var_name in _reverse_scale)
-        plot_args['cmap'] = giss.plot.cpt('giss-cpt/BlRe.cpt', reverse=reverse).cmap
-        plot_args['vmin'] = np.nanmin(pp['val'])
-        plot_args['vmax'] = np.nanmax(pp['val'])
-        cb_args['ticks'] = [plot_args['vmin'], 0, plot_args['vmax']]
-        cb_args['format'] = '%0.2f'
-
-    year,month = attrs[('fetch', 'date')]
-    pp['title'] = pp['title'] + (' %04d-%02d' % (year, month))
-
-    return pp
-   

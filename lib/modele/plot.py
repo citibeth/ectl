@@ -18,7 +18,7 @@ import numpy as np
 import numpy.ma as ma
 import giss.plot
 from icebin import ibplotter
-
+from giss import memoize,xaccess
 
 # ====================================================================
 
@@ -86,7 +86,8 @@ def get_byname(name) :
     lons, lats = by_name[name]
     return giss.plot.LonLatPlotter(lons, lats)
 
-
+# Memoize so we can compare plotters by ID
+@memoize.local()
 def guess_plotter(shape) :
     """Guesses on a plotter to use, based on the dimension of a data
     array from ModelE output.
@@ -236,8 +237,7 @@ def plot_params(var_name='', nc=None, val=None, plotter=None) :
 # ----------------------------------------------------------
 # Args: icebin_config, ice_sheet, IvE=None):
 PlotterE = memoize.local()(ibplotter.PlotterE)
-# Memoize so we can compare plotters by ID
-guess_plotter = memoize.local()(modele.plot.guess_plotter)
+#guess_plotter = memoize.local()(guess_plotter)
 
 def get_plotter(attrs, region=None):
     """Produces a plotter based on the meta-data that came with a variable.

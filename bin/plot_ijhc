@@ -3,6 +3,7 @@
 # Makes a plot of a single IJHC in a ModelE run.
 
 import modele.io
+import modele.plot
 from giss.xaccess import *
 from giss.functional import *
 from giss import xaccess,functional
@@ -22,14 +23,15 @@ parser.add_argument('var', help='Variable to plot')
 parser.add_argument('year_month', help='Month to plot (YYYY-MM)')
 parser.add_argument('--range', dest='range',
     help='Lower and upper bounds for colorbar')
-
+parser.add_argument('--rundeck', '-rd', dest='runname', default=None,
+    help='Name of run inside of output directory to look for data (. if same as run directory name)')
 args = parser.parse_args()
 dttuple = tuple(int(x) for x in args.year_month.split('-'))
 
 # --------------------------------------------------
 # ------- Fetch the data
 fetcher = bind(modele.io.fetch_rundir,
-    args.run, 'ijhc', _arg(0), *dttuple, 'ec', *_ix[:], region='greenland')
+    args.run, args.runname, 'ijhc', _arg(0), *dttuple, 'ec', *_ix[:], region='greenland')
 
 # Can do expressions on variables her if you like.
 fetch = fetcher(args.var)
@@ -37,7 +39,7 @@ fetch = fetcher(args.var)
 pp = modele.plot.plot_params(fetch)
 
 #pp['plot_args']['vmin'] = 0.0
-#pp['plot_args']['vmax'] = 2.0
+#pp['plot_args']['vmax'] = 2.
 
 # Modify the plot here...
 

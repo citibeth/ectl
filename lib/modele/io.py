@@ -281,16 +281,33 @@ class Rundir(object):
             (months_itoa[month], year, self.run_name)
 
 @function()
-def fetch_rundir(run, section, var_name, year, month, *index, **kwargs):
+def fetch_rundir(run, run_name, section, var_name, year, month, *index, **kwargs):
     """Fetches data out of a rundir, treating the entire rundir like a dataset.
     run:
-        A ModelE run directory."""
-    rundir = Rundir(os.path.realpath(run))
-    #scaled = os.path.join(run, 'scaled')
+        A ModelE run directory.
+    run_name:
+        The trailing part of files (or None, if auto-detect)
+        Eg: MAR1964.ijhcE027testEC-ec.nc, run_name = 'E027testEC-ec'
+    """
 
-    scaled_fname = scaleacc(
-        os.path.join(run, 'scaled', rundir.scaled_pat_leaf(year, month)),
-        section, accdir=rundir.accdir)
+    scaled_fname = None
+
+    # Look for the file directly in the "run" directory
+    if run_name is not None:
+        _fname = os.path.join(run,
+            '%s%04d.%s%s.nc' % (months_itoa[month], year, section, run_name))
+        print('_fname', _fname)
+        if os.path.isfile(_fname):
+            scaled_fname = _fname
+
+    # Try to generate the file with scaleacc (in the 'scaled' subdirectory)
+    if scaled_fname is None:
+        rundir = Rundir(os.path.realpath(run))
+
+        scaled_fname = scaleacc(
+            os.path.join(run, 'scaled', rundir.scaled_pat_leaf(year, month)),
+            section, accdir=rundir.accdir)
+
 
     ret = fetch(scaled_fname, var_name, *index, **kwargs)
     attrs = ret.attrs()

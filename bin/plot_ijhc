@@ -36,6 +36,9 @@ fetch = fetcher(args.var)
 
 pp = modele.plot.plot_params(fetch)
 
+#pp['plot_args']['vmin'] = 0.0
+#pp['plot_args']['vmax'] = 2.0
+
 # Modify the plot here...
 
 # ---------- Plot it!

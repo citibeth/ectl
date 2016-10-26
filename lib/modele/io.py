@@ -146,6 +146,7 @@ class scaleacc(object):
                 # Copy metadata out of the TOPO file (if we can still find it)
                 TOPO = oparam.getncattr('_file_topo')
                 if os.path.exists(TOPO):
+                    oparam.setncattr('topo_params_found',1)
                     for key,value in read_topo(TOPO).items():
                         oparam.setncattr(key, value)
 
@@ -178,9 +179,20 @@ def fetch(file_name, var_name, *index, region=None):
     # ------ Add ModelE parameters file to attributes...
     # (TODO: Look for I file in same directory if params not in the ijhc file)
     nc = ncutil.ncopen(file_name)
-    Ivar = nc.variables['param']
-    for key in Ivar.ncattrs():
-        attrs[('param', key)] = getattr(Ivar, key)
+    for vname in ('param', 'cparam', 'iparam', 'rparam'):
+        if vname in nc.variables:
+            Ivar = nc.variables[vname]
+            for key in Ivar.ncattrs():
+                attrs[('param', key)] = getattr(Ivar, key)
+
+    # ------- Add TOPO parameters to the attributes....
+    if ('param', 'topo_params_found') not in attrs:
+        # Copy metadata out of the TOPO file (if we can still find it)
+        TOPO = attrs[('param','_file_topo')]
+        if os.path.exists(TOPO):
+            attrs[('param', 'topo_params_found')] = 1
+            for key,value in read_topo(TOPO).items():
+                attrs[('param', key)] = value
 
     # --------- Adjust indexing based on the ec_segment
     dims = {d:i for i,d in enumerate(attrs[('var', 'dimensions')])}
@@ -193,11 +205,11 @@ def fetch(file_name, var_name, *index, region=None):
             raise ValueError('Error in indexing; did you forget to add an ec_segment argument?')
         attrs[('fetch', 'ec_segment')] = ec_segment
 
-        # This is elevation-classified; first index will a segment string
+        # This is elevation-classified; first index will be a segment string
         segment_names = attrs[('param', 'segment_names')].split(',')
         segment_ix = segment_names.index(ec_segment)
 
-        # Rest of index is indexes into multi-dim variable
+        # Rest of index is indices into multi-dim variable
         xindex = list(copy.copy(index[1:]))
         segment_bases = attrs[('param', 'segment_bases')]
 
@@ -215,10 +227,13 @@ def fetch(file_name, var_name, *index, region=None):
             pass
     else:
         # ------- Variable has no elevation classes
-        file_name = attrs[('fetch', 'file_name')]
-        if 'aij' in os.path.split(file_name)[1]:
-            # ------ Variable has no elevation classes
-            xindex = index
+        xindex = index
+
+        if ('jm' in dims and 'im' in dims and abs(dims['jm']-dims['im']) == 1):
+            # jm,im detected...  (RSF files)
+            attrs[('fetch', 'grid')] = 'atmosphere'
+        elif ('lat' in dims and 'lon' in dims and abs(dims['lat']-dims['lon']) == 1):
+            # lat,lon detected... (scaled files)
             attrs[('fetch', 'grid')] = 'atmosphere'
         else:
             # Don't know what grid it's on

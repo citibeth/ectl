@@ -38,15 +38,17 @@ fetch = fetcher(args.var)
 
 pp = modele.plot.plot_params(fetch)
 
+giss.plot.plot_one(pp)
+
 #pp['plot_args']['vmin'] = 0.0
 #pp['plot_args']['vmax'] = 2.
 
 # Modify the plot here...
 
-# ---------- Plot it!
-figure = matplotlib.pyplot.figure(figsize=(8.5,11))
-ax = figure.add_subplot(111)
-basemap = giss.basemap.greenland_laea(ax=ax)
-giss.plot.plot_var(ax=ax, basemap=basemap, **pp)
-matplotlib.pyplot.show()
-figure.savefig('fig.png', dpi=100, transparent=False)
+## ---------- Plot it!
+#figure = matplotlib.pyplot.figure(figsize=(8.5,11))
+#ax = figure.add_subplot(111)
+#basemap = giss.basemap.greenland_laea(ax=ax)
+#giss.plot.plot_var(ax=ax, basemap=basemap, **pp)
+#matplotlib.pyplot.show()
+#figure.savefig('fig.png', dpi=100, transparent=False)

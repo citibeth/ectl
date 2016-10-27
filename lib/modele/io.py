@@ -1,4 +1,5 @@
 import os
+import collections
 import copy
 import subprocess
 import functools
@@ -10,7 +11,7 @@ import numpy as np
 import netCDF4
 import cf_units
 
-from giss import memoize,ioutil,ncutil,giutil,xaccess,gidate
+from giss import memoize,ioutil,ncutil,giutil,xaccess,gidate,checksum
 from giss.functional import *
 from giss.xaccess import *
 
@@ -83,13 +84,13 @@ def read_topo(topo_file):
 @memoize.files()
 class scaleacc(object):
     hash_version = 0
-    def __init__(self, _ofpat, section, accdir=None, params=dict()):
+    def __init__(self, _ofpat, section, acc_dir=None, params=dict()):
         """ofpat:
             Pattern to use for the output file name.
             Eg: /home/me/JUN1951.{section}E4F40.R.nc
         section:
             Section of ACC file we want (eg: 'aij', 'ijhc', etc)
-        accdir:
+        acc_dir:
             Directory to find corresponding acc files (if needed)
         params:
             Additional attributes to add to the params variable in the
@@ -100,8 +101,11 @@ class scaleacc(object):
         self.odir,leafpat = os.path.split(ofpat)
         ofname = os.path.join(self.odir,
             leafpat.format(section=section))
-        ifname = os.path.join(self.odir if accdir is None else accdir,
+        ifname = os.path.join(self.odir if acc_dir is None else acc_dir,
             leafpat.format(section='acc'))
+
+        ofname = os.path.abspath(ofname)
+        ifname = os.path.abspath(ifname)
 
         self.section = section
         self.params = params
@@ -161,7 +165,7 @@ class scaleacc(object):
         return self.value
 # --------------------------------------------------------
 @function()
-def fetch(file_name, var_name, *index, region=None):
+def fetch_file(file_name, var_name, *index, region=None):
     """index:
         If the variable has elevation classes:
             (segment, <numeric indexing>)
@@ -249,54 +253,132 @@ def fetch(file_name, var_name, *index, region=None):
     attrs[('plotter', 'kwargs')] = plotter_kwargs
     attrs[('plotter', 'function')] = ('modele.plot', 'get_plotter') # Name of function
 
-    return ncutil.FetchTuple(attrsW, bind(ncutil.ncdata, file_name, var_name, *xindex, **kwargs))
+    return ncutil.FetchTuple(
+        attrsW,
+        ncutil.data_to_xarray(attrsW,
+            bind(ncutil.ncdata, file_name, var_name, *xindex, **kwargs)))
 
-
-# -----------------------------------------
+# ----------------------------------------------------------------
 months_itoa = ('<none>', 'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC')
 months_atoi = {s:i for i,s in enumerate(months_itoa)}
 
-_accRE = re.compile(r'(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d\d\d\d)\.acc(.*?)\.nc')
+_dateREs = r'(\d*)(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(\d+)'
+_sectionsREs = r'(acc|rsf|adiurn|agc|aij|aijk|aijl|aijmm|aj|ajl|areg|consrv|icij|ijhc)'
+
+# Regular expression matches ModelE output filenames
+_fileRE = re.compile(_dateREs + r'\.' + _sectionsREs + r'(.*?)\.nc')
+
+def _extract_if_equal(mylist, ix):
+    """Returns lst[0][ix] if list[n][ix] is equal for all n.
+    Else returns None."""
+    if len(set(item[ix] for item in mylist)) == 1:
+        return mylist[0][ix]
+    else:
+        return None
+
+
+ModelEFile = collections.namedtuple('ModelEFile', ('rundeck', 'section', 'date', 'fname'))
 
 @memoize.local()
-class Rundir(object):
-    def __init__(self, run):
-        self.accdir = run
-        self.month_files_dict = {}    # (year, month) : fname
-        self.run_name = None
+def get_groups(dir, filter_fn = lambda rundeck, section, date, fname : True):
 
-        # Poke around, see the name pattern for files in this directory
-        for leaf in os.listdir(self.accdir):
-            match = _accRE.match(leaf)
-            if match is None:
-                continue
+    """Lists the ModelE files in a directory.
+    dir:
+        Directory to list files in
+    filter_fn:
+        Tells which files to keep.  See filter_group() below.
+    Returns an OrderedDict of OrderedDicts (all sorted):
+        groups[(rundeck,section)][date] -->
+            namedtuple(rundeck,section, date, fname)
+    """
 
-            run_name = match.group(3)    # Rewrite every time; they'd better all be the same
-            if self.run_name is not None and self.run_name != run_name:
-                raise ValueError('More than one run_name in a rundir; HELP!  %s %s' % (self.run_name, run_name))
-            self.run_name = run_name
+    # Poke around, see the name pattern for files in this directory
+    files = list()
+    for leaf in os.listdir(dir):
+        match = _fileRE.match(leaf)
+        if match is None:
+            continue
 
-            month = months_atoi[match.group(1)]
-            year = int(match.group(2))
-            fname = os.path.join(self.accdir, leaf)
-            self.month_files_dict[gidate.Date(year, month)] = fname
+        # Parse out the parts of the ModelE filename
+        sday = match.group(1)
+        day = int(sday) if len(sday) > 0 else 1
+        month = months_atoi[match.group(2)]
+        year = int(match.group(3))
+        date = gidate.Date(year, month, day)
 
-        self.month_files = sorted(
-            (dttuple, fname)
-            for dttuple, fname in self.month_files_dict.items())
+        section  = match.group(4)
+        rundeck = match.group(5)
 
-    def __getitem__(self, dttuple):
-        return self.month_files_dict[dttuple]
+        # Only keep the files we like
+        fname = os.path.join(dir, leaf)
+        rec = ModelEFile(rundeck, section, date, fname)
+        if filter_fn(*rec):
+            files.append(rec)
 
-    def items(self):
-        return iter(self.month_files)
+    groups = collections.OrderedDict()    # One dict per (rundeck, section)
+    if len(files) == 0:
+        return groups
 
-    def scaled_pat_leaf(self, year, month):
-        return '%s%04d.{section}%s.nc' % \
-            (months_itoa[month], year, self.run_name)
+
+    # Separate files list by (rundeck, section)
+    files.sort()
+    files.append(ModelEFile(None,None,None,None))    # Sentinel
+
+    accum = collections.OrderedDict()
+    accum[files[0].date] = files[0]    # accum[date] = rec
+    accum0 = files[0]
+    for rec in files[1:]:
+        if (rec[0:2] != accum0[0:2]):
+            groups[tuple(accum0[0:2])] = accum
+            accum = collections.OrderedDict()
+            accum0 = rec
+        accum[rec.date] = rec
+        
+    return groups
+
+
+def get_one_group(*args, **kwargs):
+    """Returns files from a single group from get_groups(); or throws exception"""
+    groups = get_groups(*args, **kwargs)
+
+    # Quit if our filter returned files from >1 group
+    if len(groups) > 1:
+        raise ValueError('More than one group of files found in {}'.format(dir))
+    return next(iter(groups.items()))    # (rundeck, section), files
+
+def get_files(*args, **kwargs):
+    _, files = get_group(*args, **kwargs)
+    return files
+
+@memoize.local()
+class filter_group(object):
+    """Filter pattern so rundeck==rundeck, section==section and date0<=date<date1"""
+    def __init__(self, rundeck=None, section=None, date0=None, date1=None):
+        self.rundeck = rundeck
+        self.section = section
+        self.date0 = date0
+        self.date1 = date1
+
+    hash_version = 0
+    def hashup(self,hash):
+        checksum.hashup(hash, (self.rundeck, self.section, self.date0, self.date1))
+
+    def __call__(self, rundeck, section, date, fname):
+        if self.rundeck is not None and self.rundeck != rundeck:
+            return False
+        if self.section is not None and self.section != section:
+            return False
+        if self.date0 is not None and date < self.date0:
+            return False
+        if self.date1 is not None and date >= self.date1:
+            return False
+        return True
+
+# Pre-defined filter to give everything
+_all_files = filter_group()
 
 @function()
-def fetch_rundir(run, run_name, section, var_name, year, month, *index, **kwargs):
+def fetch_from_dir(dir, filter_fn, var_name, year, month, *index, **kwargs):
     """Fetches data out of a rundir, treating the entire rundir like a dataset.
     run:
         A ModelE run directory.
@@ -304,29 +386,72 @@ def fetch_rundir(run, run_name, section, var_name, year, month, *index, **kwargs
         The trailing part of files (or None, if auto-detect)
         Eg: MAR1964.ijhcE027testEC-ec.nc, run_name = 'E027testEC-ec'
     """
+    if filter_fn is None:
+        filter_fn = _all_files
 
-    scaled_fname = None
+    # Read the files out of the directory
+    files = get_files(dir, filter_fn=filter_fn)
 
-    # Look for the file directly in the "run" directory
-    if run_name is not None:
-        _fname = os.path.join(run,
-            '%s%04d.%s%s.nc' % (months_itoa[month], year, section, run_name))
-        print('_fname', _fname)
-        if os.path.isfile(_fname):
-            scaled_fname = _fname
+    # Get the filename (if the file exists)
+    date = gidate.Date(year, month)
+    file = files[date]
 
-    # Try to generate the file with scaleacc (in the 'scaled' subdirectory)
-    if scaled_fname is None:
-        rundir = Rundir(os.path.realpath(run))
-
-        scaled_fname = scaleacc(
-            os.path.join(run, 'scaled', rundir.scaled_pat_leaf(year, month)),
-            section, accdir=rundir.accdir)
-
-
-    ret = fetch(scaled_fname, var_name, *index, **kwargs)
+    ret = fetch_file(file.fname, var_name, *index, **kwargs)
     attrs = ret.attrs()
-    attrs[('fetch', 'date')] = (year, month)
+    attrs[('fetch', 'date')] = date
+    attrs[('fetch', 'rundeck')] = file.rundeck
+    attrs[('fetch', 'section')] = file.section
 
     return ret
 
+# ----------------------------------------------------------------
+def _get_scaled_fname(dir, section, year, month):
+    """Finds a scaled file inside of a ModelE run directory"""
+    #filter_fn = filter_group(section=section)
+
+    # ----- Determine what kind of directory we were given: ACC or scaled.
+    groups = get_groups(dir, filter_group(section='acc'))
+    if len(groups) == 1:
+        # dir contains ACC files; glean the rundeck name off of that
+        rundeck,_ = next(iter(groups.keys()))
+        acc_dir = dir
+        scaled_dir = os.path.join(acc_dir, 'scaled')
+    elif len(groups) == 0:
+        # dir contains no ACC files; let's see if it contains scaled files
+        # (If no scaled or acc files, this will raise)
+        (rundeck, _),_ = get_one_group(dir, filter_group(section=section))
+        acc_dir = None
+        scaled_dir = dir
+    else:
+        raise ValueError('Found more than one group in {}'.format(dir))
+
+    # Determine what the scaled file SHOULD be called
+    scaled_pat = '{month}{year:04d}.{section}{rundeck}.nc'.format(
+        month=months_itoa[month],
+        year=year, section='{section}', rundeck=rundeck)
+    scaled_leaf = scaled_pat.format(section=section)
+
+    # Look for scaled file pre-existing in scaled_dir dir (we didn't put it there)
+    if acc_dir is None:    # Just a plain scaled dir
+        fname = os.path.join(scaled_dir, scaled_leaf)
+        if os.path.exists(fname):
+            return fname
+        raise Exception('Cannot find file {} in scaled directory {}'.format(scaled_leaf, scaled_dir))
+
+    # Create it in the scaled/ directory
+    return scaleacc(
+        os.path.join(scaled_dir, scaled_pat),
+        section, acc_dir=acc_dir)
+
+@function()
+def fetch_scaled(acc_dir, section, var_name, year, month, *index, **kwargs):
+
+    fname = _get_scaled_fname(acc_dir, section, year, month)
+
+    ret = fetch_file(fname, var_name, *index, **kwargs)
+    attrs = ret.attrs()
+    attrs[('fetch', 'date')] = gidate.Date(year, month)
+
+    return ret
+
+# ----------------------------------------------------------------

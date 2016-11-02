@@ -13,6 +13,7 @@ import cf_units
 
 from giss import memoize,ioutil,ncutil,giutil,xaccess,gidate,checksum
 from giss.functional import *
+from giss import functional
 from giss.xaccess import *
 
 from ectl import rundeck
@@ -173,7 +174,7 @@ def fetch_file(file_name, var_name, *index, region=None):
         If no elevation classes:
             Regular numeric indexing"""
 
-    print('*******************', file_name)
+    print('Fetching Data:', file_name, var_name, index, region)
 
     # ------ Get variable attributes
     kwargs = {'missing_threshold' : 1.e25}
@@ -218,12 +219,12 @@ def fetch_file(file_name, var_name, *index, region=None):
         segment_bases = attrs[('param', 'segment_bases')]
 
         subdim = (segment_bases[segment_ix], segment_bases[segment_ix+1])
-        print('Index', index, ihp_d)
         xindex[ihp_d] = xaccess.reslice_subdim(xindex[ihp_d], subdim)
 
         # Determine the grid this is on
         if ec_segment == 'ec':
             attrs[('fetch', 'grid')] = 'elevation'
+            attrs[('fetch', 'grid', 'correctA')] = True
         elif ec_segment == 'legacy':
             attrs[('fetch', 'grid')] = 'atmosphere'
         else:
@@ -255,8 +256,9 @@ def fetch_file(file_name, var_name, *index, region=None):
 
     return ncutil.FetchTuple(
         attrsW,
-        ncutil.data_to_xarray(attrsW,
-            bind(ncutil.ncdata, file_name, var_name, *xindex, **kwargs)))
+            bind(ncutil.ncdata, file_name, var_name, *xindex, **kwargs))
+#        ncutil.data_to_xarray(attrsW,
+#            bind(ncutil.ncdata, file_name, var_name, *xindex, **kwargs)))
 
 # ----------------------------------------------------------------
 months_itoa = ('<none>', 'JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC')
@@ -346,10 +348,6 @@ def get_one_group(*args, **kwargs):
         raise ValueError('More than one group of files found in {}'.format(dir))
     return next(iter(groups.items()))    # (rundeck, section), files
 
-def get_files(*args, **kwargs):
-    _, files = get_group(*args, **kwargs)
-    return files
-
 @memoize.local()
 class filter_group(object):
     """Filter pattern so rundeck==rundeck, section==section and date0<=date<date1"""
@@ -378,7 +376,7 @@ class filter_group(object):
 _all_files = filter_group()
 
 @function()
-def fetch_from_dir(dir, filter_fn, var_name, year, month, *index, **kwargs):
+def _fetch_from_dir(mydir, filter_fn, var_name, year, month, *index, **kwargs):
     """Fetches data out of a rundir, treating the entire rundir like a dataset.
     run:
         A ModelE run directory.
@@ -390,10 +388,10 @@ def fetch_from_dir(dir, filter_fn, var_name, year, month, *index, **kwargs):
         filter_fn = _all_files
 
     # Read the files out of the directory
-    files = get_files(dir, filter_fn=filter_fn)
+    _,files = get_one_group(mydir, filter_fn=filter_fn)
 
     # Get the filename (if the file exists)
-    date = gidate.Date(year, month)
+    date = gidate.Date(year, month,1)
     file = files[date]
 
     ret = fetch_file(file.fname, var_name, *index, **kwargs)
@@ -405,25 +403,25 @@ def fetch_from_dir(dir, filter_fn, var_name, year, month, *index, **kwargs):
     return ret
 
 # ----------------------------------------------------------------
-def _get_scaled_fname(dir, section, year, month):
+def _get_scaled_fname(mydir, section, year, month):
     """Finds a scaled file inside of a ModelE run directory"""
     #filter_fn = filter_group(section=section)
 
     # ----- Determine what kind of directory we were given: ACC or scaled.
-    groups = get_groups(dir, filter_group(section='acc'))
+    groups = get_groups(mydir, filter_group(section='acc'))
     if len(groups) == 1:
-        # dir contains ACC files; glean the rundeck name off of that
+        # mydir contains ACC files; glean the rundeck name off of that
         rundeck,_ = next(iter(groups.keys()))
-        acc_dir = dir
+        acc_dir = mydir
         scaled_dir = os.path.join(acc_dir, 'scaled')
     elif len(groups) == 0:
-        # dir contains no ACC files; let's see if it contains scaled files
+        # mydir contains no ACC files; let's see if it contains scaled files
         # (If no scaled or acc files, this will raise)
-        (rundeck, _),_ = get_one_group(dir, filter_group(section=section))
+        (rundeck, _),_ = get_one_group(mydir, filter_group(section=section))
         acc_dir = None
-        scaled_dir = dir
+        scaled_dir = mydir
     else:
-        raise ValueError('Found more than one group in {}'.format(dir))
+        raise ValueError('Found more than one group in {}'.format(mydir))
 
     # Determine what the scaled file SHOULD be called
     scaled_pat = '{month}{year:04d}.{section}{rundeck}.nc'.format(
@@ -444,14 +442,20 @@ def _get_scaled_fname(dir, section, year, month):
         section, acc_dir=acc_dir)
 
 @function()
-def fetch_scaled(acc_dir, section, var_name, year, month, *index, **kwargs):
+def fetch_from_dir(mydir, section, var_name, year, month, *index, **kwargs):
 
-    fname = _get_scaled_fname(acc_dir, section, year, month)
+    if section == 'acc' or section == 'rsf':
+        # Fetch an unscaled file; either it's there or it's not
+        return _fetch_from_dir(mydir, filter_group(section=section),
+            var_name, year, month, *index, **kwargs)
+    else:
+        # Fetch a scaled file; can run scaleacc
+        fname = _get_scaled_fname(mydir, section, year, month)
 
-    ret = fetch_file(fname, var_name, *index, **kwargs)
-    attrs = ret.attrs()
-    attrs[('fetch', 'date')] = gidate.Date(year, month)
+        ret = fetch_file(fname, var_name, *index, **kwargs)
+        attrs = ret.attrs()
+        attrs[('fetch', 'date')] = gidate.Date(year, month)
 
-    return ret
+        return ret
 
 # ----------------------------------------------------------------

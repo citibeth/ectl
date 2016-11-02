@@ -135,103 +135,6 @@ def _default_plot_boundaries(basemap) :
     basemap.drawparallels(np.arange(-90.,120.,30.))
     basemap.drawmeridians(np.arange(0.,420.,60.))
 
-
-def plot_params(var_name='', nc=None, val=None, plotter=None) :
-    """Suggests a number of plot parameters for a ModelE ScaledACC output variable.
-    Output to be used directly as kwargs for giss.plot.plot_var()
-
-    Args:
-        var_name (string):
-            Name of the variable to plot (from the Scaled ACC file)
-        nc (netCDF4.Dataset, OPTIONAL):
-            Open netCDF Scaled ACC file.
-            If set, then data and meta-data will be read from this file.
-        val (np.array, OPTIONAL):
-            Field to plot.  If not set, then will be read from the netCDF file.
-        plotter (OPTIONAL):
-            Plotter to use when plotting data of this shape.
-
-    Returns: Dictionary with the following elements
-        plotter (giss.plot.*Plotter):
-            Abstracts away grid geometry from pcolormesh() call.
-            Guess at the right plotter (since this IS ModelE data).
-        var_name (string):
-            Name of the variable to plot (same as var_name arg)
-        val (np.ma.MaskedArray):
-            The value to plot
-        units (string, OPTIONAL):
-            Units in which val is expressed
-        title (string):
-            Suggested title for the plot
-        plot_args (dict):
-            Suggested keyword arguments for pcolormesh() command.
-            Override if you like: norm, cmap, vmin, vmax
-        cb_args (dict):
-            Suggested keyword arguments for colorbar command.
-            Override if you like: ticks, format
-        plot_boundaries (function(basemap)):
-            Plot map boundaries, coastlines, paralells, meridians, etc.
-    """
-
-    info = {'var_name' : var_name}
-
-    # Read meta-data out of the netCDF file, if we can
-    if nc is not None and var_name in nc.variables :
-        info.update(nc.variables[var_name].__dict__)
-
-    # Init kwargs for Plotter.pcolormesh() command
-    plot_args = {}
-    info['plot_args'] = plot_args
-
-    # Init kwargs for colorbar command
-    cb_args = {}
-    info['cb_args'] = cb_args
-
-    info['var_name'] = var_name
-
-    # Get the data
-    if val is None and nc is not None:
-        info['val'] = giss.modele.read_ncvar(nc, var_name)
-    else :
-        info['val'] = ma.copy(val)
-
-    # Guess a plotter
-    if plotter is None :
-        info['plotter'] = plotters.guess_plotter(info['val'])
-    else :
-        info['plotter'] = plotter
-
-#   # Rescale if needed
-#   if var_name in _change_units :
-#       rs = _change_units[var_name]
-#       info['units'] = rs[0]
-#       info['val'] = rs[1](info['val'])    # Run the scaling function
-
-    if var_name in _zero_centered :
-        plot_args['norm'] = giss.plot.AsymmetricNormalize()
-        reverse = (var_name in _reverse_scale)
-        plot_args['cmap'] = giss.plot.cpt('giss-cpt/BlRe.cpt', reverse=reverse).cmap
-        plot_args['vmin'] = np.nanmin(info['val'])
-        plot_args['vmax'] = np.nanmax(info['val'])
-        cb_args['ticks'] = [plot_args['vmin'], 0, plot_args['vmax']]
-        cb_args['format'] = '%0.2f'
-
-    # These could be decent defaults for anything with a colorbar
-    cb_args['location'] = 'bottom'
-    cb_args['size'] = '5%'
-    cb_args['pad'] = '2%'
-
-    # Suggest a title
-    if 'units' in info :
-        info['title'] = '%s\n(%s)' % (info['var_name'], info['units'])
-    else :
-        info['title'] = info['var_name']
-
-    # Default coastlines
-    info['plot_boundaries'] = _default_plot_boundaries
-
-    return info
-
 # ------------------------------------------------
 # --- Support for io.py
 # ----------------------------------------------------------
@@ -248,6 +151,7 @@ def get_plotter(attrs, region=None):
     if grid == 'atmosphere':
         plotter = modele.plotters.guess_plotter(attrs[('fetch', 'shape')])
     elif grid == 'elevation':
+        correctA = attrs[('fetch', 'grid', 'correctA')]
         icebin_in = attrs[('param', '_file_icebin_in')]
         plotter = PlotterE(icebin_in, region)
     else:
@@ -259,11 +163,10 @@ _zero_centered = {'impm', 'evap_lndice', 'evap', 'imph_lndice', 'impm_lndice', '
 
 _reverse_scale = {'impm', 'impm_lndice'}
 
-def plot_params(fetch):
+def plot_params(attrs, data):
     """Adds some ModelE-specific stuff to xaccess.plot_params()"""
 
-    attrs = fetch.attrs()
-    pp = xaccess.plot_params(fetch)
+    pp = xaccess.plot_params(attrs, data)
  
     var_name = pp.get('var_name', None)
     plot_args = pp['plot_args']
@@ -284,7 +187,7 @@ def plot_params(fetch):
         cb_args['ticks'] = [plot_args['vmin'], 0, plot_args['vmax']]
         cb_args['format'] = '%0.2f'
 
-    year,month = attrs[('fetch', 'date')]
+    year,month,_ = attrs[('fetch', 'date')]
     pp['title'] = pp['title'] + (' %04d-%02d' % (year, month))
 
     return pp

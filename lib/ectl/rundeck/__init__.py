@@ -200,12 +200,13 @@ class Params(dict):
         """Extract rundeck parametesr from a legacy rundeck."""
         ret = True
         for line in legacy.sections['Data input files'].parsed_lines():
-            symbol = symbol.lower()
             symbol,fname = line.parsed
+            # Input file keys are all case-sensitive
             self.set(symbol, fname, type=FILE, line=line)
 
         for line in legacy.sections['Parameters'].parsed_lines():
             symbol,value = line.parsed
+            # Rundeck parameters are all lower case
             symbol = symbol.lower()
             self.set(symbol, value, type=GENERAL, line=line)
 
@@ -515,7 +516,7 @@ class ParamSections(object):
         self.inputz_cold = []
 
         # Organize self.parameters into ModelE sections
-        dtsrc = float(rd['DTsrc'].value)
+        dtsrc = float(rd['dtsrc'].value)
         for param in sorted(list(rd.params.values())):
             pname = param.pname
             if isinstance(pname, str):    # Non-compound name

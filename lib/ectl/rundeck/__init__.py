@@ -200,11 +200,13 @@ class Params(dict):
         """Extract rundeck parametesr from a legacy rundeck."""
         ret = True
         for line in legacy.sections['Data input files'].parsed_lines():
+            symbol = symbol.lower()
             symbol,fname = line.parsed
             self.set(symbol, fname, type=FILE, line=line)
 
         for line in legacy.sections['Parameters'].parsed_lines():
             symbol,value = line.parsed
+            symbol = symbol.lower()
             self.set(symbol, value, type=GENERAL, line=line)
 
         # ------- Deal with the namelists

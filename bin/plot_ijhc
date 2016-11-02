@@ -36,7 +36,7 @@ fetcher = bind(modele.io.fetch_rundir,
 # Can do expressions on variables her if you like.
 fetch = fetcher(args.var)
 
-pp = modele.plot.plot_params(fetch)
+pp = modele.plot.plot_params(*fetch())
 
 giss.plot.plot_one(pp)
 

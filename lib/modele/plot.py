@@ -187,7 +187,7 @@ def plot_params(attrs, data):
         cb_args['ticks'] = [plot_args['vmin'], 0, plot_args['vmax']]
         cb_args['format'] = '%0.2f'
 
-    year,month,_ = attrs[('fetch', 'date')]
+    year,month = attrs[('fetch', 'date')][:2]
     pp['title'] = pp['title'] + (' %04d-%02d' % (year, month))
 
     return pp

@@ -37,7 +37,7 @@ class Line(object):
         return repr(self.raw)
 
     def __str__(self):
-        return '(%s, %s): %s' % (self.source, self.lineno, self.raws[-1])
+        return '(%s, %s): %s' % (self.source, self.lineno, self.raw)
 
 def find_in_path(fname, search_path):
     for path in search_path:

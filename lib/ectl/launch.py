@@ -29,6 +29,10 @@ def setup_parser(subparser):
         help='Number of MPI jobs')
     subparser.add_argument('-t', '--time', action='store', dest='time',
         help='Length of wall clock time to run (see sbatch): [mm|hh:mm:ss]')
+
+
+    subparser.add_argument('--resume', '-r', action='store_true', dest='resume', default=False,
+        help='Resume a run; do not look at rundeck.R, just resume same as last I file.')
 # --------------------------------------------------------------------
 def parse_date(str):
     if len(str) == 0:
@@ -61,6 +65,15 @@ def rd_set_ts(rd, cold_start, start_ts, end_ts):
         rd.set(('INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
 
 
+def time_to_seconds(stime):
+    """Converts the --time argument [mm|hh:mm:ss] to seconds (int)"""
+    stimes = stime.split(':')
+    if len(stimes) == 1:
+        return int(stimes[0])*60
+    if len(stimes) == 3:
+        return int(stimes[0])*3600 + int(stimes[1])*60 + int(stimes[2])
+    raise ValueError('Illegal time (should be [mm|hh:mm:ss]): {}'.format(stime))
+
 def run(args, cmd):
     """Top-level that parses command line arguments
 
@@ -89,10 +102,15 @@ def run(args, cmd):
     if hasattr(args, 'restart_file'):
         kwargs['restart_file'] = args.restart_file
 
-    launch(args.run, launcher=args.launcher, force=args.force,
-        ntasks=args.np, time=args.time,
-        rundeck_modifys=[lambda rd, cold_start: rd_set_ts(rd, cold_start, start_ts, end_ts)],
-        cold_start=(cmd == 'start'), **kwargs)
+    if args.resume:
+        ectl.launch.launch(args.run, launcher=args.launcher,
+            ntasks=args.np, time=args.time,
+            keep_I=True, add_keepalive=False)
+    else:
+        launch(args.run, launcher=args.launcher, force=args.force,
+            ntasks=args.np, time=args.time,
+            rundeck_modifys=[lambda rd, cold_start: rd_set_ts(rd, cold_start, start_ts, end_ts)],
+            cold_start=(cmd == 'start'), **kwargs)
 
 
 # These are set to match corresponding ISTART values in ModelE
@@ -105,8 +123,8 @@ LATEST = object()    # Token
 COLD = object()
 
 def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(),
-    cold_start=False, restart_file=None, restart_date=None,
-    synchronous=False):
+    cold_start=False, keep_I=False, restart_file=None, restart_date=None,
+    synchronous=False, add_keepalive=True):
     """API call to start a ModelE execution.
 
     run: str
@@ -126,6 +144,9 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         Helps modele-control determine user behavior
     cold_start: bool
         Direction from the user that a cold start is desired.
+    keep_I: bool
+        When auto-restarting using the keepalive feature, take the rundeck
+        parameters from the last I file
     restart_file:
         Restart or checkpoint file to start from.
     synchronous:
@@ -257,33 +278,39 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
 
     # ------- Load the rundeck and rewrite the I file (and symlinks)
     try:
-        rd = rundeck.load(os.path.join(paths.run, 'rundeck', 'rundeck.R'), modele_root=paths.src)
-        rd.resolve(file_path=ectl.rundeck.default_file_path, download=True,
-            download_dir=ectl.rundeck.default_file_path[0])
+        if keep_I:
+            print('****** Reading old I file')
+            rd = rundeck.load_I(os.path.join(paths.run, 'I'))
+            pnames = sorted([repr(x) for x,_ in rd.params.items()])
+        else:
+            print('****** Reading rundeck.R')
+            rd = rundeck.load(os.path.join(paths.run, 'rundeck', 'rundeck.R'), modele_root=paths.src)
+            rd.resolve(file_path=ectl.rundeck.default_file_path, download=True,
+                download_dir=ectl.rundeck.default_file_path[0])
 
-        # Copy stuff from INPUTZ_cold to INPUTZ if this is a cold start.
-        # This eliminates the need for the '-cold-restart' flag to modelexe
-        # It replaces the following lines in MODELE.f:
-        #          READ (iu_IFILE,NML=INPUTZ,ERR=900)
-        #          if (coldRestart) READ (iu_IFILE,NML=INPUTZ_cold,ERR=900)
-        for pname,param in list(rd.params.items()):
-            if not isinstance(pname, tuple):
-                continue
-            if pname[0] == 'INPUTZ_cold':
-                if start_type == START_COLD:
-                    new_pname = ('INPUTZ', pname[1])
-                    param.pname = new_pname
-                    rd.params[new_pname] = param
-                del rd.params[pname]
+            # Copy stuff from INPUTZ_cold to INPUTZ if this is a cold start.
+            # This eliminates the need for the '-cold-restart' flag to modelexe
+            # It replaces the following lines in MODELE.f:
+            #          READ (iu_IFILE,NML=INPUTZ,ERR=900)
+            #          if (coldRestart) READ (iu_IFILE,NML=INPUTZ_cold,ERR=900)
+            for pname,param in list(rd.params.items()):
+                if not isinstance(pname, tuple):
+                    continue
+                if pname[0] == 'INPUTZ_cold':
+                    if start_type == START_COLD:
+                        new_pname = ('INPUTZ', pname[1])
+                        param.pname = new_pname
+                        rd.params[new_pname] = param
+                    del rd.params[pname]
 
         # Set ISTART and restart file in I file
         rd.set(('INPUTZ', 'ISTART'), str(start_type))
         if start_type == START_RSF:
-            rd.set('AIC', rsf, type=rundeck.FILE)
+            rd.set('aic', rsf, type=rundeck.FILE)
         elif start_type == START_CHECKPOINT:
             rd.set('fort.4.nc', rsf, type=rundeck.FILE)
 
-        rd.set('KDISK', str(kdisk))
+        rd.set('kdisk', str(kdisk))
 
         # Make additional modifications to the rundeck
         for rd_modify in rundeck_modifys:
@@ -307,17 +334,22 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
 
 
     # ------ Add modele to the command
-    modele_cmd = [modelexe]
-#    if start_type == START_COLD:
-#        modele_cmd.append('-cold-restart')
-    modele_cmd.append('-i')
-    modele_cmd.append('I')
+    modele_cmd = [modelexe, '-i', 'I']
+    if time is not None:
+        time_s = time_to_seconds(time)
+        time_margin_s = 3*60
+        net_time_s = max(120, time_s - time_margin_s)
+        modele_cmd = modele_cmd + ['--time', str(net_time_s)]
 
     # ------- Run it!
     _launcher(mpi_cmd, modele_cmd, np=ntasks, time=time, synchronous=synchronous)
     if not synchronous:
         _launcher.wait()
         print_status(paths.run)
+
+    # ------- Add to keepalive
+    if add_keepalive:
+        ectl.keepalive.add(paths.run)
 
 # --------------------------------------------------------------------
 def print_status(run,status=None):

@@ -63,7 +63,8 @@ class Lock(object):
 
                 fcntl.lockf(self._fd, op | fcntl.LOCK_NB)
                 if op == fcntl.LOCK_EX:
-                    os.write(self._fd, "pid=%s,host=%s" % (os.getpid(), socket.getfqdn()))
+                    str = "pid=%s,host=%s" % (os.getpid(), socket.getfqdn())
+                    os.write(self._fd, str.encode())
                 return
 
             except IOError as error:

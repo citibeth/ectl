@@ -24,6 +24,17 @@ STOPPED=4
 FINISHED=5
 _status_str = ['NONE', 'INITIAL', 'QUEUED', 'RUNNING', 'STOPPED', 'FINISHED']
 
+class ExitReason(object):
+    UNKNOWN=0
+    FINISHED_TIME=1
+    USER_STOPPED=2
+    MAX_WTIME=3
+    SIGNAL_15=4
+    _strs = ['UNKNOWN', 'FINISHED_TIME', 'USER_STOPPED', 'MAX_WTIME', 'SIGNAL_15']
+    @staticmethod
+    def str(ix):
+        return ExitReason._strs[ix]
+
 
 # --------------------------------------------------------
 # http://stackoverflow.com/questions/12902008/python-how-to-find-out-whether-hyperthreading-is-enabled

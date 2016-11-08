@@ -196,8 +196,10 @@ class Params(dict):
 
         return param
 
-    def add_legacy(self, legacy):
-        """Extract rundeck parametesr from a legacy rundeck."""
+    def add_legacy(self, legacy, is_rundeck=True):
+        """Extract rundeck parametesr from a legacy rundeck.
+        is_rundeck:
+            True if we're reading a rundeck, False for an I file."""
         ret = True
         for line in legacy.sections['Data input files'].parsed_lines():
             symbol,fname = line.parsed
@@ -206,24 +208,39 @@ class Params(dict):
 
         for line in legacy.sections['Parameters'].parsed_lines():
             symbol,value = line.parsed
-            # Rundeck parameters are all lower case
-            symbol = symbol.lower()
-            self.set(symbol, value, type=GENERAL, line=line)
+            if is_rundeck:
+                # Rundeck parameters are all lower case
+                self.set(symbol.lower(), value, type=GENERAL, line=line)
+            else:
+                if symbol.startswith('_file_'):
+                    # Files come through as rundeck parameters in the I file
+                    fname = value
+                    self.set(symbol[6:], fname, type=FILE, line=line)
+                else:
+                    # Rundeck parameters are all lower case
+                    self.set(symbol.lower(), value, type=GENERAL, line=line)
 
         # ------- Deal with the namelists
-
-        # Split into a series of namelists, splitting on 'ISTART=...'
-        inputz = legacy.sections['InputZ']
         inputzs = list()
-        inputz_cur = list()
-        for line in inputz.parsed_lines():
-            for item in line.parsed:
-                if item[0].upper() == 'ISTART':
-                    if len(inputz_cur) > 0:
-                        inputzs.append(dict(inputz_cur))
-                    inputz_cur = list()
-                inputz_cur.append((item[0].upper(), item[1]))
-        inputzs.append(dict(inputz_cur))
+        if is_rundeck:
+            # Split into a series of namelists, splitting on 'ISTART=...'
+            inputz = legacy.sections['InputZ']
+            inputz_cur = list()
+            for line in inputz.parsed_lines():
+                for item in line.parsed:
+                    if item[0].upper() == 'ISTART':
+                        if len(inputz_cur) > 0:
+                            inputzs.append(dict(inputz_cur))
+                        inputz_cur = list()
+                    inputz_cur.append((item[0].upper(), item[1]))
+            inputzs.append(dict(inputz_cur))
+        else:
+            # Just an INPUTZ namelist, no InputZ_Cold
+            inputz = []
+            for line in legacy.sections['InputZ'].parsed_lines():
+                for item in line.parsed:
+                    inputz.append((item[0].upper(), item[1]))
+            inputzs = [dict(inputz), {}]
 
         for inputz in inputzs:
             replace_date(inputz, 'I', 'START_TIME')
@@ -360,10 +377,10 @@ class Rundeck(object):
     def update_hash(self, hash):
         xhash.update(self.build, hash)
 
-    def add_legacy(self, legacy):
+    def add_legacy(self, legacy, is_rundeck=True):
         self.legacy = legacy
         self.preamble = legacy.sections['preamble']
-        self.params.add_legacy(legacy)
+        self.params.add_legacy(legacy, is_rundeck=is_rundeck)
         self.build.add_legacy(legacy)
 
     def __repr__(self):
@@ -447,8 +464,9 @@ class Rundeck(object):
                 out.write('\n &INPUTZ\n ')
                 out.write('\n '.join(ps.inputz))
                 out.write('\n ')
-                out.write('\n '.join(ps.inputz_cold))
-                out.write('\n/\n')
+                if len(ps.inputz_cold) > 0:
+                    out.write('\n '.join(ps.inputz_cold))
+                    out.write('\n/\n')
 
                 inputz_written = True
             else:
@@ -555,7 +573,7 @@ def load_I(fname):
     rd = Rundeck()
     fin = legacy.preprocessor(fname, [])
     lrd = legacy.LegacyRundeck(fin)    # Auto-closes
-    rd.add_legacy(lrd)
+    rd.add_legacy(lrd, is_rundeck=False)
     return rd
 
 #def rundeck_to_dict(rd):

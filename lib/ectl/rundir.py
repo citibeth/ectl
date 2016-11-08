@@ -10,7 +10,7 @@ import tempfile
 import filecmp
 import shutil
 from ectl import pathutil, launchers
-import ectl.config
+from giss import ioutil
 import copy
 import subprocess
 import signal
@@ -309,4 +309,17 @@ def oldest_fort(run):
     return max([x for x in forts_status(run) if x.status==RSF_GOOD], key=lambda x : x.itime)
 
 # ---------------------------------------------------
+def _logdirs(run):
+    """Returns the log directories, sorted"""
+    return ioutil.list_dir(run, r'log(\d+)',
+        key=lambda match: int(match.group(1)))
+
+def logdirs(run):
+    return [x[1] for x in _logdirs(run)]
+
+def latest_logdir(run):
+    """Returns the most recent (largest-numbered) logdir"""
+    return _logdirs(run)[-1][1]
+
+
 # ---------------------------------------------------

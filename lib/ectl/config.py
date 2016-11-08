@@ -10,17 +10,20 @@ class Config(object):
     def __init__(self, ectl=None, run=None):
         self.ectl = None    # Root of ectl tree
         self.runs = None        # Where to create run directories, if needed
+        self.workspace = None
         self.builds = None      # Where to create build directories, if needed
         self.pkgs = None        # Where to create pkg directories, if needed
-
+        self.keepalive = None
 
         # We are given an ectl root... EASY!
         if ectl is not None:
             print('Getting config from ectl')
             self.ectl = os.path.abspath(ectl)
             self.runs = os.path.join(self.ectl)
-            self.builds = os.path.join(self.ectl, 'builds')
-            self.pkgs = os.path.join(self.ectl, 'pkgs')
+            self.workspace = os.path.join(self.ectl, 'ectl')
+            self.builds = os.path.join(self.workspace, 'builds')
+            self.pkgs = os.path.join(self.workspace, 'pkgs')
+            self.keepalive = os.path.join(self.workspace, 'keepalive.txt')
             return
 
         # Look at an existing run
@@ -33,15 +36,19 @@ class Config(object):
             build = pathutil.follow_link(os.path.join(run, 'build'))
             pkg = pathutil.follow_link(os.path.join(run, 'pkg'))
 
+
             if build is not None and pkg is not None:
                 self.builds = os.path.abspath(os.path.join(build, '..'))
-                ectl_build = os.path.abspath(os.path.join(self.builds, '..'))
+                workspace_build = os.path.abspath(os.path.join(self.builds, '..'))
 
                 self.pkgs = os.path.abspath(os.path.join(pkg, '..'))
-                ectl_pkg = os.path.abspath(os.path.join(self.pkgs, '..'))
+                workspace_pkg = os.path.abspath(os.path.join(self.pkgs, '..'))
 
-                if ectl_build == ectl_pkg:
-                    self.ectl = ectl_build
+                if workspace_build == workspace_pkg:
+                    self.workspace = workspace_build
+                    self.keepalive = os.path.join(self.workspace, 'keepalive.txt')
+                    self.ectl =os.path.abspath(os.path.join(self.workspace, '..'))
+
                 return
 
         # Last resort: search up from run directory
@@ -59,5 +66,7 @@ class Config(object):
 
         self.ectl = os.path.split(ectl_conf)[0]
         self.runs = os.path.join(self.ectl)
-        self.builds = os.path.join(self.ectl, 'builds')
-        self.pkgs = os.path.join(self.ectl, 'pkgs')
+        self.workspace = os.path.join(self.ectl, 'ectl')
+        self.builds = os.path.join(self.workspace, 'builds')
+        self.pkgs = os.path.join(self.workspace, 'pkgs')
+        self.keepalive = os.path.join(self.workspace, 'keepalive.txt')

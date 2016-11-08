@@ -6,7 +6,7 @@ import os
 import sys
 from ectl import pathutil
 import copy
-from six.moves import urllib
+import urllib.request
 from ectl import xhash
 
 # parameter types
@@ -27,7 +27,7 @@ except Exception as e:
 # ------------------------------------------
 
 
-def download_file(sval, download_dir):
+def download_file(sval, download_dir, label=''):
     # Try to download the file
     # http://stackoverflow.com/questions/22676/how-do-i-download-a-file-over-http-using-python
     file_name = os.path.join(download_dir, sval)
@@ -35,12 +35,17 @@ def download_file(sval, download_dir):
     url = 'http://portal.nccs.nasa.gov/GISS_modelE/modelE_input_data/' + sval
 
     try:
+        # Make sure output directory exists
+        try:
+            os.makedirs(os.path.split(file_name)[0])
+        except:
+            pass
+
         with open(tmp_file_name, 'wb') as fout:
-            print('Downloading {0}'.format(url))
-            u = urllib.urlopen(url)
+            u = urllib.request.urlopen(url)
             meta = u.info()
-            file_size = int(meta.getheaders("Content-Length")[0])
-            print("Downloading: %s Bytes: %s" % (file_name, file_size))
+            file_size = int(meta['Content-Length'])
+            print('{}: Downloading [{} bytes] {}'.format(label, file_size, url))
 
             file_size_dl = 0
             block_sz = 8192
@@ -61,7 +66,6 @@ def download_file(sval, download_dir):
         return file_name
     except:
         try:
-            print('Removing file %s' % tmp_file_name)
             os.remove(tmp_file_name)
         except:
             pass
@@ -272,15 +276,15 @@ class FileParams(BaseParams):
                     if download_dir is not None:
                         # Could not resolve path; download it
                         try:
-                            param.rval = download_file(param.value, download_dir)
+                            param.rval = download_file(param.value, download_dir, label=param.name)
                         except KeyboardInterrupt as e2:
                             print(e2)
                             raise
                         except Exception as e2:
-                            sys.stderr.write('{0}: {1}\n'.format(param.pname, e2))
+                            sys.stderr.write('{0}: {1}\n'.format(param.name, e2))
                             good = False
         if not good:
-            raise IOException('Problem downloading at least one file')
+            raise Exception('Problem downloading at least one file')
 # ----------------------------------------------------
 class Params(object):
 

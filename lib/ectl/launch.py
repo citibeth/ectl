@@ -295,8 +295,9 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             # It replaces the following lines in MODELE.f:
             #          READ (iu_IFILE,NML=INPUTZ,ERR=900)
             #          if (coldRestart) READ (iu_IFILE,NML=INPUTZ_cold,ERR=900)
-            for key,param in rd.params.inputz_cold.items():
-                rd.params.inputz[key] = param
+            if start_type == START_COLD:
+                for key,param in rd.params.inputz_cold.items():
+                    rd.params.inputz[key] = param
             rd.params.inputz_cold.clear()
 
         # Set ISTART and restart file in I file

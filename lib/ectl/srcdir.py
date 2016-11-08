@@ -25,6 +25,10 @@ def update_hash(src_dir, hash):
     for file in src_files:
         fname = os.path.join(src_dir, file)
         with open(fname) as fin:
-            code = fin.read()
-#            print('Hashing %s' % fname)
-            xhash.update(code, hash)
+            try:
+                code = fin.read()
+                xhash.update(code, hash)
+            except:
+                print('Error hashing file %s' % fname)
+                raise
+

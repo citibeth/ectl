@@ -80,27 +80,6 @@ class FollowLinks(object):
         out.write('%sbuild:   %s\n' % (prefix, self.build))
         out.write('%spkg:     %s\n' % (prefix, self.pkg))
 
-
-def write_I(preamble, sections, fname):
-    with open(fname, 'w') as out:
-        out.write(preamble[0].raw)    # First line of preamble
-        out.write('\n')
-
-        out.write('&&PARAMETERS\n')
-        out.write('\n'.join(sections.parameters))
-        out.write('\n')
-        out.write('\n'.join(sections.data_lines))
-        out.write('\n&&END_PARAMETERS\n')
-
-        out.write('\n&INPUTZ\n')
-        out.write('\n'.join(sections.inputz))
-        out.write('\n/\n\n')
-
-        out.write('&INPUTZ_cold\n')
-        out.write('\n'.join(sections.inputz_cold))
-        out.write('\n/\n')
-
-
 def make_rundir(rd, rundir, idir=None):
     """idir:
         Write the I file to this directory, and symlink to rundir"""

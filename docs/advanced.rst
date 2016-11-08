@@ -83,6 +83,33 @@ result when used with monthly restart files:
       $ ectl run myrun --restart-date 1957-03-17 --time 12:00:00 -np 28
 
 
+Keepalive
+---------
+
+When you start a run, ModelE lists it in a ``ectl/keepalive.txt`` file
+inside your ModelE-Control root.  The command ``ectl keepalive`` will
+read that file and continue any runs that have stopped because they
+have reached their SLURM time limit.  To use it:
+
+.. code-block:: console
+
+   $ ectl keepalive <ectl-root> --time 12:00:00 -np 28
+
+.. note::
+
+   #. ``<ectl-root>`` could be the ModelE-Control root, or any
+      subdirectory thereof.
+
+   #. As with ``ectl run``, you need to re-specify the arguments
+      ``--launcher``, ``--ntasks`` and ``--time``.
+
+   #. This command is intended to run periodically --- say, every 5
+      minutes, from a cron job.
+
+   #. ``ectl keepalive`` will not restart jobs that have terminated on
+      their own, or crashed, or were forcibly evicted from your cluster.
+
+
 Create a Rundeck
 ------------------
 

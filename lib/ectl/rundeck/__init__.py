@@ -180,6 +180,7 @@ class NamelistParams(collections.OrderedDict):
         self.set('YEAR'+suffix, str(ts[0]))
         self.set('MONTH'+suffix, str(ts[1]))
         self.set('DATE'+suffix, str(ts[2]))
+        self.set('HOUR'+suffix, str(ts[3]))
 
     def set(self, param_name, value, line=None):
         key = param_name.upper()

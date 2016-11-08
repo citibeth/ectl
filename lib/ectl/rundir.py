@@ -86,8 +86,6 @@ def make_rundir(rd, rundir, idir=None):
 
     ret = True
 
-    sections = rundeck.ParamSections(rd)
-
     # ------- Make the rundir
     try:
         os.makedirs(rundir)
@@ -99,22 +97,23 @@ def make_rundir(rd, rundir, idir=None):
         pass
 
     # -------- Remove old symlinks
-    for label, fname in sections.data_files:
+    for label in rd.params.files.keys():
         try:
             os.remove(os.path.join(rundir, label))
         except OSError:
             pass
 
     # -------- Link data files
-    for label, fname in sections.data_files:
+    for label, param in sections.data_files:
+        fname = param.rval
         os.symlink(fname, os.path.join(rundir, label))
 
     # Write them out to the I file
     if idir is not None:
-        write_I(rd.preamble, sections, os.path.join(idir, 'I'))
+        rd.write_I(os.path.join(idir, 'I'))
         os.symlink(os.path.join(idir, 'I'), os.path.join(rundir, 'I'))
     else:
-        write_I(rd.preamble, sections, os.path.join(rundir, 'I'))
+        rd.write_I(os.path.join(rundir, 'I'))
 
 
 def read_launch_txt(run):

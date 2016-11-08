@@ -60,9 +60,9 @@ def rd_set_ts(rd, cold_start, start_ts, end_ts):
     if (not cold_start) and (start_ts is not None):
         raise ValueError('Cannot set a start timestamp in the middle of a run!')
     if start_ts is not None:
-        rd.set(('INPUTZ', 'START_TIME'), datetime.datetime(*start_ts))
+        rd.params.inputz.set_timestamp('I', start_ts)
     if end_ts is not None:
-        rd.set(('INPUTZ', 'END_TIME'), datetime.datetime(*end_ts))
+        rd.params.inputz.set_timestamp('E', end_ts)
 
 
 def time_to_seconds(stime):
@@ -281,11 +281,10 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         if keep_I:
             print('****** Reading old I file')
             rd = rundeck.load_I(os.path.join(paths.run, 'I'))
-            pnames = sorted([repr(x) for x,_ in rd.params.items()])
         else:
             print('****** Reading rundeck.R')
             rd = rundeck.load(os.path.join(paths.run, 'rundeck', 'rundeck.R'), modele_root=paths.src)
-            rd.resolve(file_path=ectl.rundeck.default_file_path, download=True,
+            rd.resolve(file_path=ectl.rundeck.default_file_path,
                 download_dir=ectl.rundeck.default_file_path[0])
 
             # Copy stuff from INPUTZ_cold to INPUTZ if this is a cold start.
@@ -293,24 +292,18 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             # It replaces the following lines in MODELE.f:
             #          READ (iu_IFILE,NML=INPUTZ,ERR=900)
             #          if (coldRestart) READ (iu_IFILE,NML=INPUTZ_cold,ERR=900)
-            for pname,param in list(rd.params.items()):
-                if not isinstance(pname, tuple):
-                    continue
-                if pname[0] == 'INPUTZ_cold':
-                    if start_type == START_COLD:
-                        new_pname = ('INPUTZ', pname[1])
-                        param.pname = new_pname
-                        rd.params[new_pname] = param
-                    del rd.params[pname]
+            for key,param in rd.params.inputz_cold.items():
+                rd.params.inputz[key] = param
+            rd.params.inputz_cold.clear()
 
         # Set ISTART and restart file in I file
-        rd.set(('INPUTZ', 'ISTART'), str(start_type))
+        rd.params.inputz['ISTART'] = str(start_type)
         if start_type == START_RSF:
-            rd.set('aic', rsf, type=rundeck.FILE)
+            rd.params.files.set('AIC', rsf)
         elif start_type == START_CHECKPOINT:
-            rd.set('fort.4.nc', rsf, type=rundeck.FILE)
+            rd.params.files.set('fort.4.nc', rsf)
 
-        rd.set('kdisk', str(kdisk))
+        rd.params.params.set('kdisk', str(kdisk))
 
         # Make additional modifications to the rundeck
         for rd_modify in rundeck_modifys:

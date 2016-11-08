@@ -288,7 +288,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
 
 
     # ------------------ Download input files
-    rd.resolve(file_path=ectl.rundeck.default_file_path,
+    rd.params.files.resolve(file_path=ectl.rundeck.default_file_path,
         download_dir=ectl.rundeck.default_file_path[0])
 
     # ---- Create data file symlinks and I file

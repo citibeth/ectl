@@ -4,11 +4,19 @@ import re
 from giss import ioutil
 from ectl import launchers
 
-def logfiles(logdir):
+def _logfiles(logdir):
     """Lists the logfiles (and not other stuff) in a log directory"""
     all = ioutil.list_dir(logdir, r'q\.(\d+).(\d+)',
         lambda match: (int(match.group(1)), int(match.group(2))) )
+    return all
+
+def logfiles(logdir):
+    """Lists the logfiles (and not other stuff) in a log directory"""
+    all = _logfiles(logdir)
     return [x[1] for x in all]
+
+def logfiles_dict(logdir):
+    return dict((x[0][1], x[1]) for x in _logfiles(logdir))
 
 
 class Digger(object):

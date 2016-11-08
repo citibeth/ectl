@@ -104,7 +104,7 @@ def make_rundir(rd, rundir, idir=None):
             pass
 
     # -------- Link data files
-    for label, param in sections.data_files:
+    for label, param in rd.params.files.items():
         fname = param.rval
         os.symlink(fname, os.path.join(rundir, label))
 

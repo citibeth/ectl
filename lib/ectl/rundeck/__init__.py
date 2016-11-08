@@ -152,7 +152,13 @@ class FileParam(Param):
         """Indicate the fully resolved pathname of this file."""
         self.rval = rval
 # ------------------------------------------------------------
-class ParamParams(collections.OrderedDict):
+class BaseParams(collections.OrderedDict):
+    def __setitem__(self, key, val):
+        if not isinstance(val, Param):
+            raise ValueError('Value must be of class Param (or subclass)')
+        super().__setitem__(key, val)
+
+class ParamParams(BaseParams):
     def set(self, param_name, value, line=None):
         key = param_name.lower()
         try:
@@ -167,20 +173,66 @@ class ParamParams(collections.OrderedDict):
     def __getitem__(self, name):
         return super().__getitem__(name.lower())
 
-class NamelistParams(collections.OrderedDict):
-    def get_timestamp(self, suffix):
+class NamelistParams(BaseParams):
+    def get_timestamp(self, suffix, dtsrc=None):
+        """dtsrc: float
+            Set this if you want sub-hour accuracy"""
+        HOUR = 'HOUR' + suffix
+        TIME = 'TIME' + suffix
+        hours = 0
+        minutes = 0
+        seconds = 0
+        if TIME in self:
+            if dtsrc is None:
+                raise ValueError('dtsrc required to interpret TIMEI/TIMEE')
+            # Time of day specified in timesteps
+            seconds = int(dtsrc * self['TIME'+suffix].parsed + .5)
+            hours = seconds // 3600
+            seconds -= hours*3600
+            minutes = seconds // 60
+            seconds -= minutes*60
+        elif HOUR in self:
+            # Time of day specified in hours
+            hours = self[HOUR].parsed
+            minutes = 0
+            seconds = 0
+
         return tuple(
             self['YEAR'+suffix].parsed,
             self['MONTH'+suffix].parsed,
             self['DATE'+suffix].parsed,
-            self['HOUR'+suffix].parsed,
-            0,0)
+            hours,minutes, seconds)
 
-    def set_timestamp(self, suffix, ts):
+    def set_timestamp(self, suffix, ts, dtsrc=None):
+        ts = ts + (0,0,0)    # HH,MM, and SS are all optional
         self.set('YEAR'+suffix, str(ts[0]))
         self.set('MONTH'+suffix, str(ts[1]))
         self.set('DATE'+suffix, str(ts[2]))
-        self.set('HOUR'+suffix, str(ts[3]))
+
+        hours = ts[3]
+        minutes = ts[4]
+        seconds = ts[5]
+
+        HOUR = 'HOUR' + suffix
+        TIME = 'TIME' + suffix
+        if minutes == 0 and seconds == 0:
+            # We can get away with just HOUR
+            self.set(HOUR, str(hours))
+            try:
+                del self[TIME]
+            except KeyError:
+                pass
+        else:
+            # We need TIME...
+            if dtsrc is None:
+                raise ValueError('Must set dtsrc when setting times not on-the-hour')
+            sec = hours*3600 + minutes*60 + seconds
+            nstep = int(sec / dtsrc + .5)
+            self.set(TIME, str(nstep))
+            try:
+                del self[HOUR]
+            except KeyError:
+                pass
 
     def set(self, param_name, value, line=None):
         key = param_name.upper()
@@ -196,7 +248,7 @@ class NamelistParams(collections.OrderedDict):
     def __getitem__(self, name):
         return super().__getitem__(name.lower())
 
-class FileParams(collections.OrderedDict):
+class FileParams(BaseParams):
     def set(self, key, value, line=None):
         try:
             old_param = self[key]

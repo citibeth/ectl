@@ -60,9 +60,12 @@ def rd_set_ts(rd, cold_start, start_ts, end_ts):
     if (not cold_start) and (start_ts is not None):
         raise ValueError('Cannot set a start timestamp in the middle of a run!')
     if start_ts is not None:
+        # Start time must be on the hour
         rd.params.inputz.set_timestamp('I', start_ts)
     if end_ts is not None:
-        rd.params.inputz.set_timestamp('E', end_ts)
+        # End time must be integral number of timesteps
+        dtsrc = rd.params.params['dtsrc'].parsed
+        rd.params.inputz.set_timestamp('E', end_ts, dtsrc=dtsrc)
 
 
 def time_to_seconds(stime):
@@ -284,7 +287,7 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         else:
             print('****** Reading rundeck.R')
             rd = rundeck.load(os.path.join(paths.run, 'rundeck', 'rundeck.R'), modele_root=paths.src)
-            rd.resolve(file_path=ectl.rundeck.default_file_path,
+            rd.params.files.resolve(file_path=ectl.rundeck.default_file_path,
                 download_dir=ectl.rundeck.default_file_path[0])
 
             # Copy stuff from INPUTZ_cold to INPUTZ if this is a cold start.
@@ -297,7 +300,7 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             rd.params.inputz_cold.clear()
 
         # Set ISTART and restart file in I file
-        rd.params.inputz['ISTART'] = str(start_type)
+        rd.params.inputz.set('ISTART', str(start_type))
         if start_type == START_RSF:
             rd.params.files.set('AIC', rsf)
         elif start_type == START_CHECKPOINT:

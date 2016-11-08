@@ -107,13 +107,24 @@ From the ModelE download directory, type the following:
 
 .. code-block:: console
 
-    $ cd ~/exp/modelE
-    $ spack uninstall -ay modele@local;spack setup modele@local
+   $ cd ~/exp/modelE
+   $ spack uninstall -ay modele@local;spack setup modele@local
 
 This finds all of ModelE's dependencies and creates a file
 ``spconfig.py``, which is used in the build process to configure
 ModelE's dependencies for your system.  Alternately, you can copy
 ``spconfig.py`` from another working ModelE source directory.
+
+Quick Setup: NCCS Discover
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If you are running on NCCS Discover, you do not need to run Spack.
+Simplified instructions are:
+
+.. code-block:: console
+
+   $ cd ~/exp/modelE
+   $ ln -s $EHOME/env/modele-spconfig.py spconfig.py
 
 Create a Run
 ------------
@@ -303,7 +314,7 @@ While ModelE is running, a log file may be watched via:
 
 .. code-block:: console
 
-   $ tail -f myrun/log/q.1.0
+   $ ectl tail -f myrun
 
 Manage the Run
 --------------
@@ -380,7 +391,7 @@ stopped, using Everytrace:
 
 .. code-block:: console
 
-   $ etr myrun/log
+   $ ectl trace myrun
 
    ======== Resolving Everytrace-enabled binaries:
       /gpfsm/dnb53/rpfische/exp/pkgs/1e35f5f359ecbb675e04a1c75f9ee260/lib/libmodele.so
@@ -413,3 +424,8 @@ Everytrace provides a stacktrace, with filenames and line numbers, of how ModelE
 
 
 In this case, normal termination can also be confirmed by inspecting the log files.
+
+.. note::
+
+   The Everytrace feature is currently enabled only on the ``landice`` branch.
+

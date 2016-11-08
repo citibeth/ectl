@@ -18,22 +18,26 @@ The ModelE environment has already been installed on NCCS Discover,
 allowing users to get started quickly with ModelE.  To use this
 environment:
 
-1. Remove all ``module load`` commands from your
-``.bashrc`` file.
-
+1. Remove all ``module load`` commands from your ``.bashrc`` file.
 
 2. Add the following to your ``.bashrc`` file::
 
-    source /home/rpfische/env/modelex-gcc
+   .. code-block:: console
+
+      source /home/rpfische/env/modele-ksx-gcc
 
 Use the following instead for Intel compilers (not yet implemented)::
 
-    source /home/rpfische/env/modelex-intel
+   .. code-block:: console
+
+      source /home/rpfische/env/modele-ksx-intel
 
 3. Set ``MODELE_FILE_PATH`` in your ``.bashrc``, modifying depending
-   on where you wish to keep user-generated input files.
+   on where you wish to keep user-generated input files.  For example:
 
-    export MODELE_FILE_PATH=/discover/nobackup/projects/giss/prod_input_files:$HOME/modele_input/local
+   .. code-block:: console
+
+      export MODELE_FILE_PATH=/discover/nobackup/projects/giss/prod_input_files:$HOME/modele_input/local
 
 That's it, you are now ready to use ModelE, along with all the latest
 tools, NetCDF, etc.

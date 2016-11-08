@@ -30,7 +30,7 @@ Contents:
    introduction
    gettingstarted
    running
-..   advanced
+   advanced
 
 
 Indices and tables

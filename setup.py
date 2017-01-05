@@ -10,7 +10,7 @@ import os
 setup(name='foo',
       version='1.0',
       package_dir={'': 'lib'},
-      packages=['llnl', 'llnl.util', 'llnl.util.tty', 'ectl', 'ectl.tests', 'ectl.rundeck', 'ectl.cmd', 'spack', 'spack.util'],
+      packages=['llnl', 'llnl.util', 'llnl.util.tty', 'ectl', 'ectl.tests', 'ectl.rundeck', 'ectl.cmd', 'spack', 'spack.util', 'modele'],
       scripts=[
             os.path.join('bin', 'ectl'),
             os.path.join('bin', 'els')]

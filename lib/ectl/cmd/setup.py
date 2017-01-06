@@ -16,7 +16,6 @@ import re
 import datetime
 import sys
 from spack.util import executable
-import pyar
 import ectl.setup
 
 description = 'Setup a ModelE run.'

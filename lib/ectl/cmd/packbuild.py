@@ -17,7 +17,7 @@ import re
 import datetime
 import sys
 from spack.util import executable
-import pyar
+from giss import pyar
 
 def setup_parser(subparser):
     subparser.add_argument('--src', '-s', action='store', dest='src',

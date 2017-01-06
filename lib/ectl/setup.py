@@ -17,7 +17,7 @@ import re
 import datetime
 import sys
 from spack.util import executable
-import pyar
+from giss import pyar
 
 MODELE_CONTROL_PYAR = 'modele-control.pyar'
 

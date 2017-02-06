@@ -234,8 +234,8 @@ class ProcessError(spack.error.SpackError):
         # These are used for detailed debugging information for
         # package builds.  They're built up gradually as the exception
         # propagates.
-        self.package_context = _get_package_context()
-        self.build_log = None
+#        self.package_context = _get_package_context()
+#        self.build_log = None
 
         super(ProcessError, self).__init__(msg, long_message)
 

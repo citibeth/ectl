@@ -6,6 +6,9 @@ description = 'Continues (or restarts) a run.'
 def setup_parser(subparser):
     ectl.launch.setup_parser(subparser)
 
+    subparser.add_argument('--start', action='store_true', dest='start', default=True,
+        help="Start run from the beginning, ignore all checkpoint / restart files.")
+
     subparser.add_argument('--restart-file', '-rsf', dest='restart_file', default=None,
         help="File to use for restart (fort.X.nc or .rsf file)")
 

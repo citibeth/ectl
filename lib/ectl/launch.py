@@ -5,6 +5,7 @@ import subprocess
 import re
 from ectl import pathutil,rundeck,rundir,xhash,launchers
 import sys
+from spack.util import executable
 import ectl
 import ectl.util
 import shutil
@@ -53,6 +54,25 @@ def rsf_type(rsf):
             return START_RSF
 
 # ---------------------------------------------------
+def needs_regen(ofiles, ifiles):
+    """Determines if any of the ofiles are older than any of the ifiles.
+    This is used, eg in make, to determine if a ruile needs to be run."""
+
+    try:
+        otimes = [os.path.getmtime(x) for x in ofiles]
+    except FileNotFoundError:
+        return True
+
+    # It's an error if the input files don't all exist.
+    itimes = [os.path.getmtime(x) for x in ifiles]
+
+    min_otime = min(otimes)
+    max_itime = max(itimes)
+
+    return max_itime >= min_otime
+
+
+
 # ------------------------------------------------------
 def rd_set_ts(rd, cold_start, start_ts, end_ts):
     """Modifies the rundeck with start and end times."""
@@ -99,6 +119,8 @@ def run(args, cmd):
             raise ValueError('Invalid timespan %s' % args.timespan)
 
     # ------ Parse Arguments
+    if hasattr(args, 'start') and args.start:
+        cmd = 'start'
 
     # Launcher to use
     kwargs = dict()
@@ -124,6 +146,22 @@ START_RSF = 9         # Restart from an .rsf (AIC) file
 
 LATEST = object()    # Token
 COLD = object()
+
+# TODO: This will be used (search for find_rsf below)
+#def find_rsf(dir, dt):
+#    """Find restart file for a particular date."""
+#    for file in os.listdir(dir):
+#        match = gissdate.dateRE.search(file)
+#        if match is not None:
+#            day = int(match.group(1))
+#            month = gissdate.str_to_month(match.group(2))
+#            year = int(match.group(3))
+#
+#            dt2 = datetime.date(year, month, day)
+#            if (dt2 == dt):
+#                return os.path.join(dir, file)
+#
+#    raise ValueError('No matching rsf file for date {0}'.format(dt))
 
 def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(),
     cold_start=False, keep_I=False, restart_file=None, restart_date=None,
@@ -166,6 +204,7 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
     # Obtain restart_file from restart_date
     if restart_date is not None:
         raise NotImplementedError('Obtain restart_file from restart_date')
+        # TODO: Use find_rsf(), which is commented out above.
 
     # Check arguments
     if restart_file is not None:
@@ -286,7 +325,10 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             rd = rundeck.load_I(os.path.join(paths.run, 'I'))
         else:
             print('****** Reading rundeck.R')
-            rd = rundeck.load(os.path.join(paths.run, 'rundeck', 'rundeck.R'), modele_root=paths.src)
+            git = executable.which('git')
+            ncgen = executable.which('ncgen')
+
+            rd = rundeck.load(os.path.join(paths.run, 'config', 'rundeck.R'), modele_root=paths.src)
             rd.params.files.resolve(file_path=ectl.rundeck.default_file_path,
                 download_dir=ectl.rundeck.default_file_path[0])
 
@@ -299,6 +341,22 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
                 for key,param in rd.params.inputz_cold.items():
                     rd.params.inputz[key] = param
             rd.params.inputz_cold.clear()
+
+            # Convert .cdl files to .nc
+            for x in os.listdir('config'):
+                if not x.endswith('cdl'):
+                    break
+                ifname = os.path.join('config', x)
+                ofname = os.path.join('config', os.path.splitext(x)[0] + '.nc')
+                if needs_regen((ofname,), (ifname,)):
+                    ncgen('-o', ofname, '-k', 'nc4', ifname)
+
+
+            with ectl.util.working_dir('config'):
+                cdls = [x for x in os.listdir('.') if x.endswith('.cdl')]
+                if len(cdls) > 0:
+                    git('add', *cdls)
+
 
         # Set ISTART and restart file in I file
         rd.params.inputz.set('ISTART', str(start_type))

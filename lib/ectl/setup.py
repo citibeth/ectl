@@ -118,8 +118,8 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
 
     # ----- Create the rundeck repo (if it doesn't already exist)
     print('========= BEGIN Rundeck Management')
-    rundeck_dir = os.path.join(args_run, 'rundeck')
-    rundeck_R = os.path.join(rundeck_dir, 'rundeck.R')
+    config_dir = os.path.join(args_run, 'config')
+    rundeck_R = os.path.join(config_dir, 'rundeck.R')
 
     # The ModelE directory associated with our rundeck
     # If the rundeck is outside a ModelE directory, use
@@ -128,13 +128,13 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
 
     template_path = [os.path.join(rundeck_src, 'templates')]
 
-    if not os.path.exists(rundeck_dir):
+    if not os.path.exists(config_dir):
         # Create a new rundeck.R
         try:
-            os.makedirs(rundeck_dir)
+            os.makedirs(config_dir)
         except OSError:
             pass
-        with ectl.util.working_dir(rundeck_dir):
+        with ectl.util.working_dir(config_dir):
             git('init', echo=sys.stdout)
             git('checkout', '-b', 'upstream', echo=sys.stdout)
 
@@ -154,10 +154,17 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
         # Update/merge the rundeck
         # If there are unresolved conflicts, this will raise an exception
 
-        with ectl.util.working_dir(rundeck_dir):
+        with ectl.util.working_dir(config_dir):
             try:
-                # Check in changes from user
+                # ----- Check in changes from user
                 git('checkout', 'user', echo=sys.stdout)    # Exception on the first command
+
+                # Add all .cdl files
+                cdls = [x for x in os.listdir('.') if x.endswith('.cdl')]
+                if len(cdls) > 0:
+                    git('add', *cdls)
+
+                # Check in changes from user
                 git('commit', '-a', '-m', 'Changes from user', echo=sys.stdout, fail_on_error=False)
 
                 # Check in changes from upstream

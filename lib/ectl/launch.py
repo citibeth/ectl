@@ -54,22 +54,6 @@ def rsf_type(rsf):
             return START_RSF
 
 # ---------------------------------------------------
-def needs_regen(ofiles, ifiles):
-    """Determines if any of the ofiles are older than any of the ifiles.
-    This is used, eg in make, to determine if a ruile needs to be run."""
-
-    try:
-        otimes = [os.path.getmtime(x) for x in ofiles]
-    except FileNotFoundError:
-        return True
-
-    # It's an error if the input files don't all exist.
-    itimes = [os.path.getmtime(x) for x in ifiles]
-
-    min_otime = min(otimes)
-    max_itime = max(itimes)
-
-    return max_itime >= min_otime
 
 
 
@@ -326,11 +310,11 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         else:
             print('****** Reading rundeck.R')
             git = executable.which('git')
-            ncgen = executable.which('ncgen')
 
             rd = rundeck.load(os.path.join(paths.run, 'config', 'rundeck.R'), modele_root=paths.src)
+            download_dir=ectl.rundeck.default_file_path[0]
             rd.params.files.resolve(file_path=ectl.rundeck.default_file_path,
-                download_dir=ectl.rundeck.default_file_path[0])
+                download_dir=download_dir)
 
             # Copy stuff from INPUTZ_cold to INPUTZ if this is a cold start.
             # This eliminates the need for the '-cold-restart' flag to modelexe
@@ -342,21 +326,15 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
                     rd.params.inputz[key] = param
             rd.params.inputz_cold.clear()
 
-            # Convert .cdl files to .nc
-            for x in os.listdir('config'):
-                if not x.endswith('cdl'):
-                    break
-                ifname = os.path.join('config', x)
-                ofname = os.path.join('config', os.path.splitext(x)[0] + '.nc')
-                if needs_regen((ofname,), (ifname,)):
-                    ncgen('-o', ofname, '-k', 'nc4', ifname)
-
-
+            # Make sure the .cdl files are in git
             with ectl.util.working_dir('config'):
                 cdls = [x for x in os.listdir('.') if x.endswith('.cdl')]
                 if len(cdls) > 0:
                     git('add', *cdls)
 
+            # Convert .cdl files to .nc
+            # (while getting absolute path of files)
+            cdl_files_good = rundeck.resolve_cdls_in_dir('config', download_dir=download_dir)
 
         # Set ISTART and restart file in I file
         rd.params.inputz.set('ISTART', str(start_type))
@@ -372,6 +350,9 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             rd_modify(rd, start_type == START_COLD)
         
         rundir.make_rundir(rd, paths.run, idir=log_dir)
+
+        if not cdl_files_good:
+            raise Exception('One or more input files in a .cdl config cannot be found')
 
     except IOError:
         print('Warning: Cannot load rundeck.R.  NOT rewriting I file')

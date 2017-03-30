@@ -112,13 +112,13 @@ def purge(parser, args, unknown_args):
     scutoff = '{:0>4d}-{:0>2d}-{:0>2d}'.format(cutoff.year, cutoff.month, cutoff.day)
 
     # ------- Inactivate unused and delete older inactivated packages...
-    pkgs_dir = os.path.join(config.ectl, 'pkgs')
+    pkgs_dir = os.path.join(config.ectl, 'ectl', 'pkgs')
     n = inactivate_unused(pkgs_dir, used_pkgs)
     print('Renamed {0} packages, {1} remain active'.format(n, len(used_pkgs)))
     n = delete_inactive(pkgs_dir, cutoff)
     print('Deleted {0} packages inactivated before {1}'.format(n, scutoff))
 
-    builds_dir = os.path.join(config.ectl, 'builds')
+    builds_dir = os.path.join(config.ectl, 'ectl', 'builds')
     n = inactivate_unused(builds_dir, used_builds)
     print('Renamed {0} builds, {1} remain active'.format(n, len(used_builds)))
     n = delete_inactive(builds_dir, cutoff)

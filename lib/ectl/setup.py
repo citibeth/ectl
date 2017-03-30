@@ -17,7 +17,9 @@ import re
 import datetime
 import sys
 from spack.util import executable
-from giss import pyar
+from giss import pyar, ioutil
+import importlib
+import netCDF4
 
 MODELE_CONTROL_PYAR = 'modele-control.pyar'
 
@@ -295,10 +297,34 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
 
 
     # ------------------ Download input files
+    download_dir=ectl.rundeck.default_file_path[0]
+    good = ectl.rundeck.resolve_cdls_in_dir('config', download_dir=download_dir)
+
     rd.params.files.resolve(file_path=ectl.rundeck.default_file_path,
-        download_dir=ectl.rundeck.default_file_path[0])
+        download_dir=download_dir)
+
+    if not good:
+        raise Exception('Problem resolving one or more input filesnames')
 
     # ---- Create data file symlinks and I file
     # (Just so the user can see what it will be; this is
     # re-done in launch.py)
     rundir.make_rundir(rd, args_run)
+
+    # ---- Run setup scripts...
+    for fname in os.listdir(os.path.join(args_run, 'config')):
+        if not fname.endswith('.nc'):
+            continue
+
+        # Obtain list of setup functions we need to call
+        setup_fns = list()
+        with netCDF4.Dataset(os.path.join(args_run, 'config', fname), 'r') as nc:
+            setups = nc.variables['setups']
+            for attr in setups.ncattrs():
+                path = getattr(setups, attr).split('.')
+                module = importlib.import_module('.'.join(path[:-1]))
+                setup_fns.append(getattr(module, path[-1]))
+
+        with ioutil.pushd(args_run):
+            for setup_fn in setup_fns:
+                setup_fn(args_run, rd)

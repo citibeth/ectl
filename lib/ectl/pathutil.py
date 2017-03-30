@@ -1,6 +1,7 @@
 from __future__ import print_function
 import os
 import re
+import sys
 
 # http://code.activestate.com/recipes/52224-find-a-file-given-a-search-path/
 def search_file(filename, search_path):
@@ -14,6 +15,25 @@ def search_file(filename, search_path):
         if os.path.exists(fname):
             return fname
     raise IOError('File not found in search path: {0}'.format(filename))
+
+def search_or_download_file(param_name, file_name, search_path, download_dir=None):
+    try:
+        return search_file(file_name, search_path)
+    except IOError as e:
+        if download_dir is None:
+            # We can't download, just raise an error.
+            sys.stderr.write('{0}: {1}\n'.format(param_name, e))
+            raise
+        else:
+            # Could not resolve path; download it
+            try:
+                return download_file(file_name, download_dir, label=param_name)
+            except KeyboardInterrupt as e2:
+                print(e2)
+                raise
+            except Exception as e2:
+                sys.stderr.write('{0}: {1}\n'.format(param_name, e2))
+                raise
 
 
 def is_modele_root(dir):

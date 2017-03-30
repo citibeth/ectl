@@ -1,4 +1,6 @@
 from __future__ import print_function
+from spack.util import executable
+import netCDF4
 import ectl.rundeck
 from ectl.rundeck import legacy
 import collections
@@ -8,6 +10,7 @@ from ectl import pathutil
 import copy
 import urllib.request
 from ectl import xhash
+from giss import ioutil
 
 # parameter types
 GENERAL = 'GENERAL'
@@ -24,9 +27,70 @@ try:
     default_file_path = os.environ['MODELE_FILE_PATH'].split(os.pathsep)
 except Exception as e:
     default_file_path = ['.']
-# ------------------------------------------
+# --------------------------------------------------------------
 
+def resolve_cdls_in_dir(config_dir, download_dir=None):
+    """Converts .cdl auxillary Rundeck files to .nc; and resolves input
+    files in them as well."""
 
+    cdl_files = [
+        os.path.join(config_dir, x)
+        for x in os.listdir(config_dir)
+        if x.endswith('.cdl')]
+
+    ncgen = executable.which('ncgen')
+    good = True
+    for ifname in cdl_files:
+        ofname = os.path.splitext(ifname)[0] + '.nc'
+        if ioutil.needs_regen((ofname,), (ifname,)):
+            ncgen('-o', ofname, '-k', 'nc4', ifname)
+
+            # Resolve input file paths
+            # (see similar logic in rundeck/__init__.py)
+            _good = True
+            with netCDF4.Dataset(ofname, 'a') as nc:
+                for var_name in nc.variables:
+                    var = nc.variables[var_name]
+                    for aname in var.ncattrs():
+                        aval = getattr(var, aname)
+                        if not isinstance(aval, str):
+                            continue
+                        if aval.startswith('input-file:'):
+                            fname0 = aval[11:]
+                            try:
+                                fname1 = pathutil.search_or_download_file(
+                                    aname, fname0,
+                                    ectl.rundeck.default_file_path,
+                                    download_dir=download_dir)
+                                setattr(var, aname, fname1)
+                            except Exception as e:
+                                # Errors were already reported in search_or_download_file
+                                print(e)
+                                _good = False
+                        elif aval.startswith('output-file:'):
+                            fname0 = aval[12:]
+                            fname1 = os.path.abspath(fname0)
+                            odir = os.path.split(fname1)[0]
+                            try:
+                                os.makedirs(odir)
+                            except OSError:
+                                pass
+                            setattr(var, aname, fname1)
+                        elif aval.startswith('output-dir:'):
+                            fname0 = aval[11:]
+                            fname1 = os.path.abspath(fname0)
+                            try:
+                                os.makedirs(fname1)
+                            except OSError:
+                                pass
+                            setattr(var, aname, fname1)
+            if not _good:
+                try:
+                    os.remove(ofname)
+                except:
+                    pass
+    return good
+# --------------------------------------------------------------
 def download_file(sval, download_dir, label=''):
     # Try to download the file
     # http://stackoverflow.com/questions/22676/how-do-i-download-a-file-over-http-using-python
@@ -271,18 +335,10 @@ class FileParams(BaseParams):
         for param in self.values():
             if param.rval is None:
                 try:
-                    param.rval = pathutil.search_file(param.value, file_path)
-                except IOError as e:
-                    if download_dir is not None:
-                        # Could not resolve path; download it
-                        try:
-                            param.rval = download_file(param.value, download_dir, label=param.name)
-                        except KeyboardInterrupt as e2:
-                            print(e2)
-                            raise
-                        except Exception as e2:
-                            sys.stderr.write('{0}: {1}\n'.format(param.name, e2))
-                            good = False
+                    param.rval = pathutil.search_or_download_file(param.name, param.value, file_path, download_dir=None)
+                except Exception as e:
+                    good = False
+
         if not good:
             raise Exception('Problem downloading at least one file')
 # ----------------------------------------------------

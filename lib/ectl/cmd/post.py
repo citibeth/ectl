@@ -11,6 +11,7 @@ import scipy.sparse
 import collections
 from modele.constants import SHW,SHI,LHM
 from contextlib import contextmanager
+from modele import enthalpy
 
 class IndexSet(object):
     """Copy of C++ IndexSet"""
@@ -146,11 +147,11 @@ def process_gcm_out(ifname):
 #           ovals[outputs['eruno'],:] = ivals[inputs['eruno'],:] / ivals[inputs['runo'],:]
 #                ovals[outputs['enthxfer'],:] = ivals[inputs['enthxfer'],:] / ivals[inputs['massxfer'],:]
 
-            tsn,isn = hsn_to_tsn(ivals[inputs['eruno'],:], ivals[inputs['runo'],:])
+            tsn,isn = enthalpy.enth_to_temp(ivals[inputs['eruno'],:], ivals[inputs['runo'],:])
             ovals[outputs['runo_T'],:] = tsn[:]
             ovals[outputs['runo_liquid'],:] = isn[:]
 
-            tsn,isn = hsn_to_tsn(ivals[inputs['enthxfer'],:], ivals[inputs['massxfer'],:])
+            tsn,isn = enthalpy.enth_to_temp(ivals[inputs['enthxfer'],:], ivals[inputs['massxfer'],:])
             ovals[outputs['massxfer_T'],:] = tsn[:]
             ovals[outputs['massxfer_liquid'],:] = isn[:]
 

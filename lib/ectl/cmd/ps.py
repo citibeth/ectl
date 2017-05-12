@@ -25,7 +25,8 @@ def setup_parser(subparser):
         help='Directory of run to give execution command')
     subparser.add_argument('-r', '--recursive', action='store_true', dest='recursive', default=False,
         help='Recursively descend directories')
-
+    subparser.add_argument('-R', '--running', action='store_true', dest='running', default=False,
+        help='Show only RUNNING processes') 
 
 
 
@@ -71,6 +72,9 @@ def ps(parser, args, unknown_args):
         if (status.status == launchers.NONE):
             sys.stderr.write('Error: No valid run in directory %s\n' % run)
             sys.exit(-1)
+
+        if (args.running and status.status != launchers.RUNNING):
+            continue
 
         # Top-line status
         print('============================ {0}'.format(os.path.split(run)[1]))

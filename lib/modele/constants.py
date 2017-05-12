@@ -9,3 +9,9 @@ LHM = 3.34e5
 RHOI = 916.6
 # Density of ettled snow [kg m-3]
 RHOS = 300.
+
+
+# -------------------------------------------
+# See LIGrid.F90
+UI_ICEBIN = 1
+UI_NOTHING = 2

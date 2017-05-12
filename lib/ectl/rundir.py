@@ -211,13 +211,17 @@ class Status(object):
 # ---------------------------------------------------
 def walk_rundirs(top, doruns):
     status = ectl.rundir.Status(top)
+    thisruns = list()
     if status.status == launchers.NONE:
-        for sub in os.listdir(top):
+        for sub in sorted(os.listdir(top)):
             subdir = os.path.join(top, sub)
             if os.path.isdir(subdir):
                 walk_rundirs(subdir, doruns)
     else:
-        doruns.append((top,status))
+        thisruns.append((top,status))
+
+    thisruns.sort()
+    doruns += thisruns
 
 def all_rundirs(runs, recursive=False):
     """Used for `ectl ps` and `ectl purge`"""

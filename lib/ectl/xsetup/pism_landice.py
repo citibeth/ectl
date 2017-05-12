@@ -6,6 +6,7 @@ import icebin
 from modele.constants import SHW,SHI,LHM,RHOI
 import numpy as np
 import giss
+import shutil
 
 def redo_GIC(GIC0, TOPO, pism_ic, icebin_in, GIC=None):
 
@@ -25,7 +26,7 @@ def redo_GIC(GIC0, TOPO, pism_ic, icebin_in, GIC=None):
     # Get regridding matrices
     mm = icebin.GCMRegridder(icebin_in)
     rm = mm.regrid_matrices('greenland')
-    EvI = rm.matrix('EvI')
+    EvI_n = rm.matrix('EvI', correctA=False)    # No projection correction; use for regridding [J kg-1]
     AvI = rm.matrix('AvI')
 
 
@@ -40,7 +41,15 @@ def redo_GIC(GIC0, TOPO, pism_ic, icebin_in, GIC=None):
         jm = len(nc.dimensions['lat'])
         im = len(nc.dimensions['lon'])
 
+        fhc = nc.variables['fhc'][:]
+
     nlice = 4
+
+    # Read original ModelE initial conditions
+    with netCDF4.Dataset(GIC0, 'r') as nc:
+        wsn0A = nc.variables['wsn'][0,:,:,0]
+        hsn0A = nc.variables['hsn'][0,:,:,0]
+        senth0A = hsn0A / wsn0A
 
     # Read data from PISM initial conditions
     with netCDF4.Dataset(pism_ic) as nc:
@@ -48,10 +57,16 @@ def redo_GIC(GIC0, TOPO, pism_ic, icebin_in, GIC=None):
         fracI = nc.variables['effective_ice_surface_liquid_water_fraction'][-1,:,:].reshape(-1)    # [1]
     senthI = enthalpy.temp_to_senth(tempI-273.15, fracI)    # Convert to specific enthalpy (ModelE base)
     senthA = AvI.apply(senthI).reshape((jm,im))
+    # Combine with global initial condition
+    # This merging of ice sheets can/will create a few grid cells that
+    # had an ice sheet before under ModelE, and are now off the PISM
+    # ice sheet; they've become non-ice-sheet "legacy ice."
+    # More careful (manual) merging would solve this.
+    nans = np.isnan(senthA)
+    senthA[nans] = senth0A[nans]
 
     shapeA = (jm,im)
     shapeEx = (nhc_gcm,jm,im,nlice)    # Ex = Stieglitz model dimensions w/ nhc_gcm
-    print('shapeEx', shapeEx)
 
     dz = np.zeros(shapeEx)    # (nhc_gcm, j, i, nlice)
     #wsn = np.zeros(shapeEx)
@@ -69,8 +84,7 @@ def redo_GIC(GIC0, TOPO, pism_ic, icebin_in, GIC=None):
     wsn = dz * RHOI
 
     # Initialize everything at 1/2 ice density (this IS the surface...)
-    wsn = dz * RHOI * .5
-
+    # wsn = dz * RHOI * .5
 
     # ------------------------ Legacy Segment
     base,end = segments['legacy']
@@ -79,16 +93,24 @@ def redo_GIC(GIC0, TOPO, pism_ic, icebin_in, GIC=None):
 
     # ------------------------ Sea/Land
     base,end = segments['sealand']
-    for il in range(0,nlice):
-        shsn[base:end,:,:,il] = senthA
+    for ihc in range(base,end):
+        for il in range(0,nlice):
+            shsn[ihc,:,:,il] = senthA
 
     # ------------------------ EC segments
     base,end = segments['ec']
     nhc = end-base
-    valE = EvI.apply(senthI).reshape((nhc,jm,im))
+    senthE = EvI_n.apply(senthI).reshape((nhc,jm,im))
+    for ihc in range(0,nhc):
+        senthE_ihc = senthE[ihc,:,:]
+        nans = np.isnan(senthE_ihc)
+        senthE_ihc[nans] = senthA[nans]
+
     for il in range(0,nlice):
-        shsn[base:end,:,:,il] = valE
+        shsn[base:end,:,:,il] = senthE
     # ----------------------------------------------
+
+    shsn[fhc == 0] = np.nan
 
     tsn,isn = enthalpy.senth_to_temp(shsn)
     hsn = shsn * wsn
@@ -104,10 +126,10 @@ def redo_GIC(GIC0, TOPO, pism_ic, icebin_in, GIC=None):
 
             args = 'd', ('nhc', 'jm', 'im', 'nlice')
             kwargs = {'zlib' : True}
-            dz_v = ncout.createVariable('dz', *args, *kwargs)
-            wsn_v = ncout.createVariable('wsn', *args, *kwargs)
-            hsn_v = ncout.createVariable('hsn', *args, *kwargs)
-            tsn_v = ncout.createVariable('tsn', *args, *kwargs)
+            dz_v = ncout.createVariable('dz', *args, **kwargs)
+            wsn_v = ncout.createVariable('wsn', *args, **kwargs)
+            hsn_v = ncout.createVariable('hsn', *args, **kwargs)
+            tsn_v = ncout.createVariable('tsn', *args, **kwargs)
             nco.copy_data()
 
             # Rewrite...

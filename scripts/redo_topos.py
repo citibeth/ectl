@@ -1,8 +1,5 @@
 import os
 srcdir = os.path.dirname(os.path.abspath(__file__))
-import sys
-sys.path.append(os.path.join(srcdir, '..', '..', 'python', 'lib'))
-
 import copy
 import numpy as np
 from giss import giutil
@@ -12,7 +9,8 @@ from giss.ncutil import copy_nc
 import netCDF4
 import argparse
 from modele.constants import SHI,LHM,RHOI,RHOS,UI_ICEBIN,UI_NOTHING
-
+import re
+from modele.init_cond import topos
 
 gcm_out_RE = re.compile('gcm-out-(\d\d\d\d\d\d\d\d).nc')
 def run_dates(run):
@@ -60,36 +58,38 @@ def redo_topos(icebin_in, topo_in, run='.'):
         # Vars on A grid
         Avars = ('focean', 'flake', 'fgrnd', 'fgice', 'zatmo_m')
         for name in Avars:
-            ncout.createVariable(name, 'd', ('time', 'lat', 'lon'))
+            ncout.createVariable(name, 'd', ('time', 'lat', 'lon'), zlib=True)
 
         # Vars on E grid
         Evars = ('fhc', 'elevE')
         for name in Evars:
-            ncout.createVariable(name, 'd', ('time', 'HC', 'lat', 'lon'))
+            ncout.createVariable(name, 'd', ('time', 'HC', 'lat', 'lon'), zlib=True)
         # -------------------------------------------
 
 
 
-        for i in range(0,len(times)-1):
+        for timei in range(0,len(times)-1):
             # Manage loop
-            dt0 = times[i]
-            dt1 = times[i+1]
-            if dt1 >= end:
-                break
+            dt0 = times[timei]
+            dt1 = times[timei+1]
+
+#            if timei>2:
+#                break
+#            if dt1 >= end:
+#                break
 
             # Reshape and write out variables that were computed
-            elevI = pism_out_nc.variables['elevI'][i]
-            sheet = SheetInfo('greenland', elevI)
+            elevI = pism_out_nc.variables['elevI'][timei]
+            sheet = topos.SheetInfo('greenland', elevI)
             vars = mytopos.get_fractions((sheet,))
 
             for name in Avars:
-                val = vars[name].reshape((lat, lon))
-                ncout[name][:] = val[:]
+                val = vars[name].reshape((len(lat), len(lon)))
+                ncout[name][timei,:] = val[:]
 
             for name in Evars:
-                val = vars[name].reshape((mytopos.nhc_gcm, lat, lon))
-                ncout[name][:] = val[:]
-
+                val = vars[name].reshape((mytopos.nhc_gcm, len(lat), len(lon)))
+                ncout[name][timei,:] = val[:]
 
     finally:
         if pism_out_nc is not None:
@@ -98,14 +98,14 @@ def redo_topos(icebin_in, topo_in, run='.'):
             ncout.close()
 
 
-def redo_topos_in_run_dir(run):
-    with open(os.path.join('config', 'icebin.nc')) as nc:
+def redo_topos_in_run_dir(run, topo_fname):
+    with netCDF4.Dataset(os.path.join(run, 'config', 'icebin.nc'), 'r') as nc:
         icebin_in = nc.variables['m.info'].grid
 
     file_path = os.environ['MODELE_FILE_PATH'].split(os.pathsep)
-    iTOPO = giutil.search_file(args.topo+'.nc', file_path)
+    iTOPO = giutil.search_file(topo_fname, file_path)
     print(' READ: iTOPO = {}'.format(iTOPO))
 
-    redo_topos(icebin_in, topo_in, run=run)
+    redo_topos(icebin_in, iTOPO, run=run)
 
-redo_topos_in_run_dir('.')
+redo_topos_in_run_dir('.', 'Z2HX2fromZ1QX1N.nc')

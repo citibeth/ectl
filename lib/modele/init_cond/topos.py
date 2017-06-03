@@ -68,6 +68,8 @@ class Topos(object):
         self.mm = icebin.GCMRegridder(icebin_in)
 
         # ------- Set up dimensions and elevation classes
+        self.icebin_in = icebin_in
+
         with netCDF4.Dataset(icebin_in) as nc:
             # General dimensions
             self.indexingHC = ibgrid.Indexing(nc, 'm.indexingHC')
@@ -76,33 +78,34 @@ class Topos(object):
             self.nA = getattr(nc.variables['m.gridA.info'], 'cells.nfull')
             self.nE_ice = self.nhc_ice * self.nA
 
-            # Native area of grid cells
+            # Native area of grid cells'
+
             indexA_sub = nc.variables['m.gridA.cells.index'][:]
             areaA_sub = nc.variables['m.gridA.cells.native_area'][:]
             self.areaA = np.zeros(self.nA)
             self.areaA[indexA_sub] = areaA_sub    # Native area of full grid cell (on sphere)
 
 
-            # ------- Define elevation class structure
-            segments = list()
+        # ------- Define elevation class structure
+        segments = list()
 
-            # Segment 0: The legacy elevation class
-            self.legacy_base = 0
-            self.nlegacy = 1
-            segments.append(('legacy', self.legacy_base))
+        # Segment 0: The legacy elevation class
+        self.legacy_base = 0
+        self.nlegacy = 1
+        segments.append(('legacy', self.legacy_base))
 
-            # Segment 1: Two elevation classes only: one for sea, one for land
-            self.sealand_base = self.legacy_base + nlegacy
-            self.nsealand = 2
-            segments.append(('sealand', self.sealand_base))
+        # Segment 1: Two elevation classes only: one for sea, one for land
+        self.sealand_base = self.legacy_base + self.nlegacy
+        self.nsealand = 2
+        segments.append(('sealand', self.sealand_base))
 
-            # Segment 2: Full elevation classes
-            self.ec_base = self.sealand_base + self.nsealand
-            segments.append(('ec', self.ec_base))
+        # Segment 2: Full elevation classes
+        self.ec_base = self.sealand_base + self.nsealand
+        segments.append(('ec', self.ec_base))
 
-            # Total number of EC's across all segments
-            self.nhc_gcm = self.ec_base + self.nhc_ice
-            self.nE_gcm = self.nhc_gcm * self.nA
+        # Total number of EC's across all segments
+        self.nhc_gcm = self.ec_base + self.nhc_ice
+        self.nE_gcm = self.nhc_gcm * self.nA
 
 
     def get_fractions(self, sheets):
@@ -121,8 +124,8 @@ class Topos(object):
         elevA = np.zeros((self.nA,)) + np.nan
         wAvE = np.zeros((self.nA,)) + np.nan
         for sheet in sheets:
-
-            rm = self.mm.regrid_matrices(sheet.name, sheet.elevI)
+            self.mm.set_elevI(sheet.name, sheet.elevI)
+            rm = self.mm.regrid_matrices(sheet.name)
             wAvE_i,AvE_i,_ = rm.matrix('AvE', scale=True)()
             _     ,EvI_i,_ = rm.matrix('EvI', scale=True)()
             _     ,AvI_i,_ = rm.matrix('AvI', scale=True)()
@@ -136,6 +139,9 @@ class Topos(object):
             concat_vector(elevA, elevA_i)
 
         AvE = AvE_c()
+
+        # ----------------- elevI things were originally computed with
+            for sheet in sheets:
 
         # ------------------ Read original surface area fractions
         with netCDF4.Dataset(self.topo_in) as nc:
@@ -219,12 +225,14 @@ class Topos(object):
         fhc2[self.sealand_base:self.sealand_base+self.nsealand,:] *= 1e-30
 
         # ---------- Return the values we've computed
+        ret['areaA'] = self.areaA
         ret['focean'] = focean
         ret['flake'] = flake
         ret['fgrnd'] = fgrnd
         ret['fgice'] = fgice
         ret['zatmo_m'] = zatmo_m
         ret['fhc'] = fhc
+        ret['underice'] = underice
         ret['elevE'] = elevE
 
         return ret

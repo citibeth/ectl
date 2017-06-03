@@ -73,13 +73,20 @@ def redo_topos(icebin_in, topo_in, run='.'):
             dt0 = times[timei]
             dt1 = times[timei+1]
 
-#            if timei>2:
-#                break
+            if timei>2:
+                break
 #            if dt1 >= end:
 #                break
 
+# TODO: Regrid elevI WITHOUT area correction
+
             # Reshape and write out variables that were computed
             elevI = pism_out_nc.variables['elevI'][timei]
+            if timei>0:
+#                elevI[:] = np.nan
+#                elevI[:] = 500.
+#                elevI[elevI<2000] = np.nan
+
             sheet = topos.SheetInfo('greenland', elevI)
             vars = mytopos.get_fractions((sheet,))
 

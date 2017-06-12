@@ -25,13 +25,11 @@ def run_dates(run):
 
 
 def redo_topos(icebin_in, topo_in, run='.'):
-    mytopos = topos.Topos(icebin_in, topo_in)
-
     pism_out_nc = None
     ncout = None
 
     try:
-        mytopos = topos.Topos(icebin_in, topo_in)
+        mytopos = topos.ToposInitial(icebin_in, topo_in)
 
         pism_out_nc =  netCDF4.Dataset(os.path.join(run, 'greenland', 'pism-out.nc'))
 
@@ -56,7 +54,7 @@ def redo_topos(icebin_in, topo_in, run='.'):
         lon = ncout.createDimension('lon', size=lon)
 
         # Vars on A grid
-        Avars = ('focean', 'flake', 'fgrnd', 'fgice', 'zatmo_m')
+        Avars = ('focean', 'flake', 'fgrnd', 'ficecap', 'fdynice', 'fgice', 'ftotal', 'zatmo_m', 'egrnd', 'eicecap', 'edynice')
         for name in Avars:
             ncout.createVariable(name, 'd', ('time', 'lat', 'lon'), zlib=True)
 
@@ -82,7 +80,7 @@ def redo_topos(icebin_in, topo_in, run='.'):
 
             # Reshape and write out variables that were computed
             elevI = pism_out_nc.variables['elevI'][timei]
-            if timei>0:
+#            if timei>0:
 #                elevI[:] = np.nan
 #                elevI[:] = 500.
 #                elevI[elevI<2000] = np.nan

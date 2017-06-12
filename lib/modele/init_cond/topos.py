@@ -51,7 +51,9 @@ class ConcatCoo(object):
             shape=self.shape)
 
 
-class Topos(object):
+class ToposInitial(object):
+    """Use the first time you're setting up TOPOS stuff."""
+
     def __init__(self, icebin_in, topo_in):
         """
         Args:
@@ -91,11 +93,13 @@ class Topos(object):
 
         # Segment 0: The legacy elevation class
         self.legacy_base = 0
-        self.nlegacy = 1
+        self.nlegacy = 1    # [all ice in cell + ocean] * 1e-30
         segments.append(('legacy', self.legacy_base))
 
-        # Segment 1: Two elevation classes only: one for sea, one for land
+        # Segment 1: Separate out icecap, dynamic ice
         self.sealand_base = self.legacy_base + self.nlegacy
+        self.icecap_ec = self.sealand_base + 0
+        self.dynice_ec = self.sealand_base + 1
         self.nsealand = 2
         segments.append(('sealand', self.sealand_base))
 
@@ -114,10 +118,6 @@ class Topos(object):
                 The ice sheet to process.
         """
         ret = {}    # Dict of output values
-
-
-
-
 
         # -------- Assemble global matrices & vectors from per-sheet versions
         AvE_c = ConcatCoo()
@@ -140,30 +140,32 @@ class Topos(object):
 
         AvE = AvE_c()
 
-        # ----------------- elevI things were originally computed with
-            for sheet in sheets:
 
         # ------------------ Read original surface area fractions
         with netCDF4.Dataset(self.topo_in) as nc:
             focean = nc.variables['focean'][:].reshape(-1)
             flake = nc.variables['flake'][:].reshape(-1)
             fgrnd = nc.variables['fgrnd'][:].reshape(-1)    # Alt: FEARTH0
-            fgice = nc.variables['fgice'][:].reshape(-1)    # Alt: FLICE
+            ficecap = nc.variables['fgice'][:].reshape(-1)    # non-ice-sheet ice
             zatmo_m = nc.variables['zatmo'][:].reshape(-1)    # _m means [meters]
+        fdynice = np.zeros(self.nA)
 
-        # ------------- Set things on A grid
-        _maskA = ~np.isnan(elevA)
-        fgice[_maskA] = wAvE[_maskA] / self.areaA[_maskA]
-        fgrnd = 1. - (flake + focean + fgice)
-        fgrnd[fgrnd<0] = 0.
-        focean = 1. - (flake + fgrnd + fgice)
-        if not np.all(focean >= 0):
-            print('focean', focean[focean<0])
-            raise ValueError('FOCEAN went negative; take from some other land surface type')
+        # ------------- Divide ice into icecap vs. dynice
+        mask_dynice = ~np.isnan(elevA)    # A grid cells touched by ice sheet
+        ficecap[mask_dynice] = 0          # Ice sheet eliminates non-ice-sheet ice in cell
+        fdynice[mask_dynice] = wAvE[mask_dynice] / self.areaA[mask_dynice]    # Dynamic ice
+        mask_icecap = (ficecap != 0)
+        mask_grnd = (fgrnd != 0)
 
-        # Assume elevation=0 for non-ice-sheet areas.  This is OK for ocean portions,
-        # not OK for bare land portions.
-        zatmo_m[_maskA] = elevA[_maskA] * fgice[_maskA]
+        egrnd = np.zeros(self.nA) + np.nan    # Elevation
+        eicecap = np.zeros(self.nA) + np.nan    # Elevation
+        edynice = np.zeros(self.nA) + np.nan    # Elevation
+
+        # Apportion original elevation equally between bare land and original ice
+        elev_land = zatmo_m / (1. - focean)    # Will be NaN over ocean
+        egrnd[mask_grnd] = elev_land[mask_grnd]
+        eicecap[mask_icecap] = elev_land[mask_icecap]
+        edynice[mask_dynice] = elevA[mask_dynice]
 
         # ---------------- Set things on E grid
         shapeE2 = (self.nhc_ice, self.nA)
@@ -176,43 +178,54 @@ class Topos(object):
         underice = np.zeros((self.nE_gcm,)) + np.nan
         underice2 = underice.reshape(shapeE2_gcm)
 
-        # ------- Segment 0: Legacy Segment
-        # Compute the legacy elevation class, but don't include in sums
-        fhc2[self.legacy_base,fgice != 0] = 1.   # Legacy ice for Greenland and Antarctica
-        underice2[self.legacy_base,fgice != 0] = UI_NOTHING
+        # ------------ Finish stuff on A grid
+        fgrnd = 1. - (flake + focean + ficecap + fdynice)
+        fgrnd[fgrnd<0] = 0.
+        ficecap = 1. - (flake + focean + fgrnd + fdynice)
 
-        elevE2[self.legacy_base,:] = zatmo_m
-        # Assume elevation=0 for non-ice-sheet areas.  This is OK for ocean portions,
-        # not OK for bare land portions.
-        elevE2[self.legacy_base,_maskA] = zatmo_m[_maskA]
-
-
-        # ------- Segment 1: SeaLand Segment
+#        focean = 1. - (flake + fgrnd + fgice)
+#        if not np.all(focean >= 0):
+#            print('focean', focean[focean<0])
+#            raise ValueError('FOCEAN went negative; take from some other land surface type')
+ 
+        ftotal = fgrnd + ficecap + fdynice + focean + flake
+ 
+        # ------- Segment 1: ocean,icecap
         # ihc=0: Non-ice portion of grid cell at sea level
 
-        # FHC is fraction of ICE-COVERED area in this elevation class
-        # Therefore, FHC=0 for the sea portion of the SeaLand Segment
-        # NOTE: fhc[self.sealand_base,_maskA] = 1.-fgice[_maskA]
-        # We could do away with this EC altogether because it's not used.
-        fhc2[self.sealand_base,_maskA] = 0.
-        underice2[self.sealand_base,_maskA] = 0
-        elevE2[self.sealand_base,_maskA] = 0.
-        # ihc=1: Ice portion of grid cell at mean for the ice portion
-        # FHC is fraction of ICE-COVERED area in this elevation class
-        # Therefore, FHC=1 for the land portion of the SeaLand Segment
-        # NOT: fhc[self.sealand_base+1,_maskA] = fgice[_maskA]
-        fhc2[self.sealand_base+1,_maskA] = 1.
-        underice2[self.sealand_base+1,_maskA] = UI_NOTHING
-        elevE2[self.sealand_base+1,_maskA] = elevA[_maskA]
+        # icecap_ec
+        # focean is zero elevation; assume fgrnd and ice are same elevation
+        # This is initial TOPO, so no sharing of icecap & dynice
+        fhc2[self.icecap_ec,mask_icecap] = ficecap[mask_icecap]
+        underice2[self.icecap_ec,mask_icecap] = UI_NOTHING
+        elevE2[self.icecap_ec,:] = eicecap
+
+        # dynice_ec (Summary diagnostic EC of all the individual EC's)
+        fhc2[self.dynice_ec,mask_dynice] = fdynice[mask_dynice] * 1e-30
+        underice2[self.dynice_ec,mask_dynice] = UI_NOTHING
+        elevE2[self.dynice_ec,:] = edynice
+
+        # ------- Segment 0: Legacy Segment
+        # Compute the legacy elevation class, but don't include in sums
+        # Assumes non-ice areas have elevation = 0
+        fhc2[self.legacy_base,:] = (ficecap + fdynice) * 1e-30
+        underice2[self.legacy_base,:] = UI_NOTHING
+
+        zatmo_m = np.zeros(self.nA)
+        zatmo_m[mask_grnd] += egrnd[mask_grnd] * fgrnd[mask_grnd]
+        zatmo_m[mask_icecap] += eicecap[mask_icecap] * ficecap[mask_icecap]
+        zatmo_m[mask_dynice] += edynice[mask_dynice] * fdynice[mask_dynice]
+
+        mask = (fhc2[self.legacy_base,:] != 0)
+        elevE2[self.legacy_base,mask] = zatmo_m[mask]
 
         # ---------- Segment 2: Full Elevation Classes
-
         for iA,iE,weight in zip(AvE.row, AvE.col, AvE.data):
             # iE must be contained within cell iA (local propety of matrix)
             iA2,ihc = self.indexingHC.index_to_tuple(iE)
             if iA2 != iA:
                 raise ValueError('Matrix is non-local: iA={}, iE={}, iA2={}'.format(iA,iE,iA2))
-            fhc2[self.ec_base+ihc,iA] = weight
+            fhc2[self.ec_base+ihc,iA] = weight * (fdynice[iA] / (fdynice[iA] + ficecap[iA]))
             underice2[self.ec_base+ihc,iA] = UI_ICEBIN
 
         for i in range(0,self.nA):
@@ -220,19 +233,24 @@ class Topos(object):
 
 
 
-        # --------- Disable non-prognostic segments
-        fhc2[self.legacy_base,:] *= 1e-30
-        fhc2[self.sealand_base:self.sealand_base+self.nsealand,:] *= 1e-30
-
         # ---------- Return the values we've computed
+#        fhc2[6:,:] = 0
+
         ret['areaA'] = self.areaA
         ret['focean'] = focean
         ret['flake'] = flake
         ret['fgrnd'] = fgrnd
-        ret['fgice'] = fgice
+        ret['ficecap'] = ficecap
+        ret['fdynice'] = fdynice
+        ret['fgice'] = ficecap + fdynice
+        ret['ftotal'] = ftotal
         ret['zatmo_m'] = zatmo_m
         ret['fhc'] = fhc
         ret['underice'] = underice
         ret['elevE'] = elevE
+        ret['egrnd'] = egrnd
+        ret['eicecap'] = eicecap
+        ret['edynice'] = edynice
 
         return ret
+

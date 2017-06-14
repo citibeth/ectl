@@ -54,12 +54,12 @@ def redo_topos(icebin_in, topo_in, run='.'):
         lon = ncout.createDimension('lon', size=lon)
 
         # Vars on A grid
-        Avars = ('focean', 'flake', 'fgrnd', 'ficecap', 'fdynice', 'fgice', 'ftotal', 'zatmo_m', 'egrnd', 'eicecap', 'edynice')
+        Avars = ('areaA', 'focean', 'flake', 'fgrnd', 'ficecap', 'fdynice', 'fgice', 'ftotal', 'zatmo_m', 'egrnd', 'eicecap', 'edynice')
         for name in Avars:
             ncout.createVariable(name, 'd', ('time', 'lat', 'lon'), zlib=True)
 
         # Vars on E grid
-        Evars = ('fhc', 'elevE')
+        Evars = ('fhc', 'elevE', 'underice')
         for name in Evars:
             ncout.createVariable(name, 'd', ('time', 'HC', 'lat', 'lon'), zlib=True)
         # -------------------------------------------
@@ -71,15 +71,19 @@ def redo_topos(icebin_in, topo_in, run='.'):
             dt0 = times[timei]
             dt1 = times[timei+1]
 
-            if timei>2:
-                break
+            # Reshape and write out variables that were computed
+            elevI = pism_out_nc.variables['elevI'][timei]
+
+            if timei == 1:
+                mytopos = topos.ToposSubsequent(icebin_in, ncout, 0, elevI)
+
+#            if timei>2:
+#                break
 #            if dt1 >= end:
 #                break
 
 # TODO: Regrid elevI WITHOUT area correction
 
-            # Reshape and write out variables that were computed
-            elevI = pism_out_nc.variables['elevI'][timei]
 #            if timei>0:
 #                elevI[:] = np.nan
 #                elevI[:] = 500.

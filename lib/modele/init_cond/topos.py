@@ -125,8 +125,14 @@ class ToposSuper(object):
         focean, flake,
         regrids):
 
+        ficecap[abs(ficecap)<1e-14] = 0
+        fdynice[abs(fdynice)<1e-14] = 0
+        fgrnd[abs(fgrnd)<1e-14] = 0
+
+
         mask_icecap = (ficecap != 0)
         mask_grnd = (fgrnd != 0)
+        print('mask_grnd1 sum', sum(mask_grnd))
         mask_dynice = ~np.isnan(regrids.elevA)    # A grid cells touched by ice sheet
 
         # ---------------- Set things on E grid
@@ -162,9 +168,29 @@ class ToposSuper(object):
         underice2[self.legacy_base,:] = UI_NOTHING
 
         zatmo_m = np.zeros(self.nA)
-        zatmo_m[mask_grnd] += egrnd[mask_grnd] * fgrnd[mask_grnd]
-        zatmo_m[mask_icecap] += eicecap[mask_icecap] * ficecap[mask_icecap]
-        zatmo_m[mask_dynice] += edynice[mask_dynice] * fdynice[mask_dynice]
+
+        print('---------- BEGIN computeE()')
+        val = egrnd[mask_grnd] * fgrnd[mask_grnd]
+        print('NaN: grnd', np.any(np.isnan(val)), np.any(np.isnan(egrnd[mask_grnd])), np.any(np.isnan(fgrnd[mask_grnd])))
+        if np.any(np.isnan(egrnd[mask_grnd])):
+            print('egrnd2 is NaN')
+#        if np.any(np.isnan(val)):
+#            print('NaN: grnd')
+        zatmo_m[mask_grnd] += val
+
+        val = eicecap[mask_icecap] * ficecap[mask_icecap]
+        if np.any(np.isnan(val)):
+            print('NaN: icecap')
+        zatmo_m[mask_icecap] += val
+
+        val = edynice[mask_dynice] * fdynice[mask_dynice]
+        if np.any(np.isnan(val)):
+            print('NaN: dynice')
+        zatmo_m[mask_dynice] += val
+
+
+#        zatmo_m[mask_icecap] += eicecap[mask_icecap] * ficecap[mask_icecap]
+#        zatmo_m[mask_dynice] += edynice[mask_dynice] * fdynice[mask_dynice]
 
         mask = (fhc2[self.legacy_base,:] != 0)
         elevE2[self.legacy_base,mask] = zatmo_m[mask]
@@ -235,35 +261,65 @@ class ToposInitial(ToposSuper):
         regrids = get_global_regrids(mm, sheets, self.nA)
 
         # ------------------ Read original surface area fractions
+        focean = np.zeros(self.nA)
+        flake = np.zeros(self.nA)
+        fgrnd = np.zeros(self.nA)
+        ficecap = np.zeros(self.nA)
+        zatmo_m = np.zeros(self.nA)
+
         with netCDF4.Dataset(self.topo_in) as nc:
-            focean = nc.variables['focean'][:].reshape(-1)
-            flake = nc.variables['flake'][:].reshape(-1)
-            fgrnd = nc.variables['fgrnd'][:].reshape(-1)    # Alt: FEARTH0
-            ficecap = nc.variables['fgice'][:].reshape(-1)    # non-ice-sheet ice
-            zatmo_m = nc.variables['zatmo'][:].reshape(-1)    # _m means [meters]
+            focean[:] = nc.variables['focean'][:].reshape(-1)
+            flake[:] = nc.variables['flake'][:].reshape(-1)
+            fgrnd[:] = nc.variables['fgrnd'][:].reshape(-1)    # Alt: FEARTH0
+            ficecap[:] = nc.variables['fgice'][:].reshape(-1)    # non-ice-sheet ice
+            zatmo_m[:] = nc.variables['zatmo'][:].reshape(-1)    # _m means [meters]
         fdynice = np.zeros(self.nA)
 
         # ------------- Divide ice into icecap vs. dynice
         mask_dynice = ~np.isnan(regrids.elevA)    # A grid cells touched by ice sheet
         ficecap[mask_dynice] = 0          # Ice sheet eliminates non-ice-sheet ice in cell
         fdynice[mask_dynice] = regrids.wAvE[mask_dynice] / self.areaA[mask_dynice]    # Dynamic ice
-        mask_icecap = (ficecap != 0)
-        mask_grnd = (fgrnd != 0)
 
+        # Make up elevation for bare-ground cells that didn't used to exist
         egrnd = np.zeros(self.nA) + np.nan    # Elevation
         eicecap = np.zeros(self.nA) + np.nan    # Elevation
         edynice = np.zeros(self.nA) + np.nan    # Elevation
 
         # Apportion original elevation equally between bare land and original ice
-        elev_land = zatmo_m / (1. - focean)    # Will be NaN over ocean
-        egrnd[mask_grnd] = elev_land[mask_grnd]
-        eicecap[mask_icecap] = elev_land[mask_icecap]
+        elev_land = zatmo_m[:] / (1. - focean)    # Will be NaN over ocean
+        mask = (fgrnd != 0)
+        egrnd[mask] = elev_land[mask]
+        mask = (ficecap != 0)
+        eicecap[mask] = elev_land[mask]
         edynice[mask_dynice] = regrids.elevA[mask_dynice]
 
         # ------------ Finish stuff on A grid
         fgrnd = 1. - (flake + focean + ficecap + fdynice)
-        fgrnd[fgrnd<0] = 0.
-        ficecap = 1. - (flake + focean + fgrnd + fdynice)
+
+        fgrnd[abs(fgrnd)<1e-14] = 0
+        lz = (fgrnd < 0)
+        print('fgrnd < 0:', sum(lz))
+        ficecap[lz] += fgrnd[lz]
+        fgrnd[lz] = 0.
+
+        # The remaining indicates that dynice covered some of what was
+        # previously ocean.  Take away from either focean or fdynice,
+        # depending on which ones is bigger
+        for ix in np.where(ficecap < 0)[0]:
+            if focean[ix] > fdynice[ix]:
+                focean[ix] += ficecap[ix]
+            else:
+                fdynice[ix] += ficecap[ix]
+            ficecap[ix] = 0
+
+        mask = (fgrnd != 0)
+        egrnd[np.logical_and(mask, np.isnan(egrnd))] = 0
+
+        mask = (ficecap != 0)
+        eicecap[np.logical_and(mask, np.isnan(eicecap))] = 0
+
+
+#        ficecap = 1. - (flake + focean + fgrnd + fdynice)
 
 #        focean = 1. - (flake + fgrnd + fgice)
 #        if not np.all(focean >= 0):
@@ -274,8 +330,10 @@ class ToposInitial(ToposSuper):
 
 
 class ToposSubsequent(ToposSuper):
-    def __init__(self, icebin_in, topo0_out, elevI):
+    def __init__(self, icebin_in, ncout, topo0_itime, elevI):
         self.icebin_in = icebin_in
+        self.ncout = ncout
+        self.topo0_itime = topo0_itime
         self.elevI = elevI
 
         self.read_icebin_in(icebin_in)
@@ -291,27 +349,37 @@ class ToposSubsequent(ToposSuper):
         regrids = get_global_regrids(mm, sheets, self.nA)
 
         # Read result of first call to ToposInitial()
-        with netCDF4.Dataset(topo0_out) as nc:
-            areaA0 = nc.variables['areaA'][:].reshape(-1)
-            focean0 = nc.variables['focean'][:].reshape(-1)
-            flake0 = nc.variables['flake'][:].reshape(-1)
-            fgrnd0 = nc.variables['fgrnd'][:].reshape(-1)
-            ficecap0 = nc.variables['ficecap'][:].reshape(-1)
-            fdynice0 = nc.variables['fdynice'][:].reshape(-1)
-            fgice0 = nc.variables['fgice'][:].reshape(-1)
-            ftotal0 = nc.variables['ftotal'][:].reshape(-1)
-            zatmo_m0 = nc.variables['zatmo_m'][:].reshape(-1)
-            fhc0 = nc.variables['fhc'][:].reshape(-1)
-            underice0 = nc.variables['underice'][:].reshape(-1)
-            elevE0 = nc.variables['elevE'][:].reshape(-1)
-            egrnd0 = nc.variables['egrnd'][:].reshape(-1)
-            eicecap0 = nc.variables['eicecap'][:].reshape(-1)
-            edynice0 = nc.variables['edynice'][:].reshape(-1)
+        it = self.topo0_itime
+        nc = self.ncout
+        areaA0 = nc.variables['areaA'][it,:].reshape(-1)
+        focean0 = nc.variables['focean'][it,:].reshape(-1)
+        flake0 = nc.variables['flake'][it,:].reshape(-1)
+        fgrnd0 = nc.variables['fgrnd'][it,:].reshape(-1)
+        ficecap0 = nc.variables['ficecap'][it,:].reshape(-1)
+        fdynice0 = nc.variables['fdynice'][it,:].reshape(-1)
+        fgice0 = nc.variables['fgice'][it,:].reshape(-1)
+        ftotal0 = nc.variables['ftotal'][it,:].reshape(-1)
+        zatmo_m0 = nc.variables['zatmo_m'][it,:].reshape(-1)
+        fhc0 = nc.variables['fhc'][it,:].reshape(-1)
+        underice0 = nc.variables['underice'][it,:].reshape(-1)
+        elevE0 = nc.variables['elevE'][it,:].reshape(-1)
+        egrnd0 = nc.variables['egrnd'][it,:].reshape(-1)
+        eicecap0 = nc.variables['eicecap'][it,:].reshape(-1)
+        edynice0 = nc.variables['edynice'][it,:].reshape(-1)
+
+        # Carry forward values from original TOPO
+        ficecap = ficecap0
+        fgrnd = fgrnd0
+        focean = focean0
+        flake = flake0
 
         # Figure out new fdynice, based on GrIS
         fdynice = np.zeros(self.nA)
         mask_dynice = ~np.isnan(regrids.elevA)    # A grid cells touched by ice sheet
         fdynice[mask_dynice] = regrids.wAvE[mask_dynice] / self.areaA[mask_dynice]    # Dynamic ice
+        edynice = regrids.elevA
+
+
 
         diff = fdynice - fdynice0
         fgrnd -= diff

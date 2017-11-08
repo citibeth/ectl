@@ -193,15 +193,21 @@ def fetch_file(file_name, var_name, *index, region=None):
     # ------- Add TOPO parameters to the attributes....
     if ('param', 'topo_params_found') not in attrs:
         # Copy metadata out of the TOPO file (if we can still find it)
-        TOPO = attrs[('param','_file_topo')]
-        if os.path.exists(TOPO):
-            attrs[('param', 'topo_params_found')] = 1
-            for key,value in read_topo(TOPO).items():
-                attrs[('param', key)] = value
+        try:
+            TOPO = attrs[('param','_file_topo')]
+            if os.path.exists(TOPO):
+                attrs[('param', 'topo_params_found')] = 1
+                for key,value in read_topo(TOPO).items():
+                    attrs[('param', key)] = value
+        except KeyError:
+            pass    # Some files don't have this param
 
     # --------- Adjust indexing based on the ec_segment
     dims = {d:i for i,d in enumerate(attrs[('var', 'dimensions')])}
-    ihp_d = giutil.get_first(dims, ('nhp', 'nhc'))
+    try:
+        ihp_d = giutil.get_first(dims, ('nhp', 'nhc'))
+    except KeyError:
+        ihp_d = None
 
     if ihp_d is not None:
         # ------ Variable has elevation classes

@@ -149,7 +149,7 @@ def get_plotter(attrs, region=None):
 
     grid = attrs[('fetch', 'grid')]
     if grid == 'atmosphere':
-        plotter = modele.plotters.guess_plotter(attrs[('fetch', 'shape')])
+        plotter = guess_plotter(attrs[('fetch', 'shape')])
     elif grid == 'elevation':
         correctA = attrs[('fetch', 'grid', 'correctA')]
         icebin_in = attrs[('param', '_file_icebin_in')]
@@ -187,8 +187,11 @@ def plot_params(attrs, data):
         cb_args['ticks'] = [plot_args['vmin'], 0, plot_args['vmax']]
         cb_args['format'] = '%0.2f'
 
-    year,month = attrs[('fetch', 'date')][:2]
-    pp['title'] = pp['title'] + (' %04d-%02d' % (year, month))
+    try:
+        year,month = attrs[('fetch', 'date')][:2]
+        pp['title'] = pp['title'] + (' %04d-%02d' % (year, month))
+    except KeyError:
+        pass
 
     return pp
    

@@ -4,6 +4,7 @@ import os
 import subprocess
 import re
 from ectl import pathutil,rundeck,rundir,xhash,launchers
+import ectl.cdlparams
 import sys
 from spack.util import executable
 import ectl
@@ -312,8 +313,8 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             git = executable.which('git')
 
             rd = rundeck.load(os.path.join(paths.run, 'config', 'rundeck.R'), modele_root=paths.src)
-            download_dir=ectl.rundeck.default_file_path[0]
-            rd.params.files.resolve(file_path=ectl.rundeck.default_file_path,
+            download_dir=ectl.paths.default_file[0]
+            rd.params.files.resolve(file_path=ectl.paths.default_file,
                 download_dir=download_dir)
 
             # Copy stuff from INPUTZ_cold to INPUTZ if this is a cold start.
@@ -334,7 +335,7 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
 
             # Convert .cdl files to .nc
             # (while getting absolute path of files)
-            cdl_files_good = rundeck.resolve_cdls_in_dir('config', download_dir=download_dir)
+            cdl_files_good = ectl.cdlparams.resolve_cdls_in_dir('config', download_dir=download_dir)
 
         # Set ISTART and restart file in I file
         rd.params.inputz.set('ISTART', str(start_type))

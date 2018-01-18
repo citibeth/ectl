@@ -7,6 +7,7 @@ import llnl.util.tty as tty
 import ectl.util
 import ectl
 import ectl.cmd
+import ectl.cdlparams
 from ectl import pathutil,rundir,xhash,srcdir,launchers
 import ectl.config
 import ectl.rundeck
@@ -297,10 +298,10 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
 
 
     # ------------------ Download input files
-    download_dir=ectl.rundeck.default_file_path[0]
-    good = ectl.rundeck.resolve_cdls_in_dir('config', download_dir=download_dir)
+    download_dir=ectl.paths.default_file[0]
+    good = ectl.cdlparams.resolve_cdls_in_dir(os.path.join(args_run, 'config'), download_dir=download_dir)
 
-    rd.params.files.resolve(file_path=ectl.rundeck.default_file_path,
+    rd.params.files.resolve(file_path=ectl.paths.default_file,
         download_dir=download_dir)
 
     if not good:

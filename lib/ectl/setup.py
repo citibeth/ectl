@@ -298,10 +298,11 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
 
 
     # ------------------ Download input files
-    download_dir=ectl.paths.default_file[0]
+    download_dir = os.environ['MODELE_ORIGIN_DIR']
     good = ectl.cdlparams.resolve_cdls_in_dir(os.path.join(args_run, 'config'), download_dir=download_dir)
 
-    rd.params.files.resolve(file_path=ectl.paths.default_file,
+    rd.params.files.resolve(
+        file_path=ectl.paths.default_file,
         download_dir=download_dir)
 
     if not good:

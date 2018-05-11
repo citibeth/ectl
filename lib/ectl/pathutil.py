@@ -2,6 +2,8 @@ from __future__ import print_function
 import os
 import re
 import sys
+import urllib.request
+import subprocess
 
 # http://code.activestate.com/recipes/52224-find-a-file-given-a-search-path/
 def search_file(filename, search_path):
@@ -16,7 +18,73 @@ def search_file(filename, search_path):
             return fname
     raise IOError('File not found in search path: {0}'.format(filename))
 
+# ------------------------------------------
+def download_file(sval, download_dir, label=''):
+    # Try to download the file
+    # http://stackoverflow.com/questions/22676/how-do-i-download-a-file-over-http-using-python
+    file_name = os.path.join(download_dir, sval)
+    tmp_file_name = file_name + '.tmp'
+    url = 'https://portal.nccs.nasa.gov/GISS_modelE/modelE_input_data/' + sval
+
+    try:
+        # Make sure output directory exists
+        try:
+            os.makedirs(os.path.split(file_name)[0])
+        except:
+            pass
+
+        with open(tmp_file_name, 'wb') as fout:
+            u = urllib.request.urlopen(url)
+            meta = u.info()
+            file_size = int(meta['Content-Length'])
+            print('{}: Downloading [{} bytes] {}'.format(label, file_size, sval))
+
+            file_size_dl = 0
+            block_sz = 8192
+            while True:
+                buffer = u.read(block_sz)
+                if not buffer:
+                    print()
+                    break
+
+                file_size_dl += len(buffer)
+                fout.write(buffer)
+                status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
+                status = status + chr(8)*(len(status))
+                print(status, end='')
+                sys.stdout.flush()
+
+        # Downloaded the file OK; now put in final place
+        os.rename(tmp_file_name, file_name)
+
+        return file_name
+    except:
+        try:
+            os.remove(tmp_file_name)
+        except:
+            pass
+        raise
+
+def download_file_curl(sval, download_dir, label=''):
+    # Try to download the file
+    # http://stackoverflow.com/questions/22676/how-do-i-download-a-file-over-http-using-python
+    file_name = os.path.join(download_dir, sval)
+    url = 'https://portal.nccs.nasa.gov/GISS_modelE/modelE_input_data/' + sval
+
+    # Make sure output directory exists
+    try:
+        os.makedirs(os.path.split(file_name)[0])
+    except:
+        pass
+
+    print('{}: Downloading {}'.format(label, sval))
+    cmd = ['curl', '--output', file_name, url]
+    subprocess.check_call(cmd)
+    print('---------------------------------------------')
+
+
 def search_or_download_file(param_name, file_name, search_path, download_dir=None):
+
     try:
         return search_file(file_name, search_path)
     except IOError as e:
@@ -27,13 +95,14 @@ def search_or_download_file(param_name, file_name, search_path, download_dir=Non
         else:
             # Could not resolve path; download it
             try:
-                return download_file(file_name, download_dir, label=param_name)
+                return download_file_curl(file_name, download_dir, label=param_name)
             except KeyboardInterrupt as e2:
                 print(e2)
                 raise
             except Exception as e2:
                 sys.stderr.write('{0}: {1}\n'.format(param_name, e2))
                 raise
+    sys.exit(0)
 
 
 def is_modele_root(dir):

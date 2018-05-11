@@ -4,7 +4,6 @@ import collections
 import os
 import sys
 from ectl import pathutil
-import urllib.request
 from ectl import xhash
 import ectl.paths
 
@@ -12,50 +11,6 @@ import ectl.paths
 GENERAL = 'GENERAL'
 FILE = 'FILE'
 
-# ------------------------------------------
-def download_file(sval, download_dir, label=''):
-    # Try to download the file
-    # http://stackoverflow.com/questions/22676/how-do-i-download-a-file-over-http-using-python
-    file_name = os.path.join(download_dir, sval)
-    tmp_file_name = file_name + '.tmp'
-    url = 'http://portal.nccs.nasa.gov/GISS_modelE/modelE_input_data/' + sval
-
-    try:
-        # Make sure output directory exists
-        try:
-            os.makedirs(os.path.split(file_name)[0])
-        except:
-            pass
-
-        with open(tmp_file_name, 'wb') as fout:
-            u = urllib.request.urlopen(url)
-            meta = u.info()
-            file_size = int(meta['Content-Length'])
-            print('{}: Downloading [{} bytes] {}'.format(label, file_size, url))
-
-            file_size_dl = 0
-            block_sz = 8192
-            while True:
-                buffer = u.read(block_sz)
-                if not buffer:
-                    break
-
-                file_size_dl += len(buffer)
-                fout.write(buffer)
-                status = r"%10d  [%3.2f%%]" % (file_size_dl, file_size_dl * 100. / file_size)
-                status = status + chr(8)*(len(status)+1)
-                print(status, end='')
-
-        # Downloaded the file OK; now put in final place
-        os.rename(tmp_file_name, file_name)
-
-        return file_name
-    except:
-        try:
-            os.remove(tmp_file_name)
-        except:
-            pass
-        raise
 
 # ----------------------------------------------------------
 def parse_rundeck_value(sval):
@@ -257,7 +212,7 @@ class FileParams(BaseParams):
         for param in self.values():
             if param.rval is None:
                 try:
-                    param.rval = pathutil.search_or_download_file(param.name, param.value, file_path, download_dir=None)
+                    param.rval = pathutil.search_or_download_file(param.name, param.value, file_path, download_dir=download_dir)
                 except Exception as e:
                     good = False
 

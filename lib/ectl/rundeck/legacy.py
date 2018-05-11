@@ -71,7 +71,7 @@ def preprocessor(fname, search_path):
         pass
 
 
-sectionRE = re.compile(r'\s*((Preamble):?|(Preprocessor\s+Options):?|(Run\s+Options):?|(Object\s+modules):?|(Components):?|(Component\s+Options):?|(Data\s+input\s+files):?|(&&PARAMETERS)|(&INPUTZ))\s*')
+sectionRE = re.compile(r'\s*((Preamble):?|(Preprocessor\s+Options):?|(Run\s+Options):?|(Object\s+modules):?|(Components):?|(Component\s+Options):?|(Data\s+input\s+files):?|(Label\s+and\s+Namelist).*|(&&PARAMETERS)|(&INPUTZ))\s*')
 num_sections = 9
 
 def sectionalize(fin):
@@ -232,6 +232,7 @@ class LegacyRundeck(object):
             ('Components', WordList()),
             ('Component Options', ComponentOptions()),
             ('Data input files', KeyEqValue()),
+            ('Label and Namelist', CopyLines()),
             ('Parameters', KeyEqValue()),
             ('InputZ', NameList())
         ]

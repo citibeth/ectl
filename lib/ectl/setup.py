@@ -238,10 +238,9 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
         try:
 
             # Unpack CMake build files if a modele-control.pyar file exists
-            # If any of these files needs to change, we expect the user to
-            # edit the pyar file.
+            # Do not overwrite existing build files
             with ectl.util.working_dir(src):
-                if unpack and os.path.exists(MODELE_CONTROL_PYAR):
+                if unpack and os.path.exists(MODELE_CONTROL_PYAR) and not os.path.exists('CMakeLists.txt'):
                     print('Adding files from modele-control.pyar')
                     with open(MODELE_CONTROL_PYAR) as fin:
                         pyar.unpack_archive(fin, '.')
@@ -258,9 +257,9 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                 os.chdir(build)
 
                 # Read the shebang out of setup.py to get around 80-char limit
-                spconfig_py = os.path.join(src, 'spconfig.py')
+                modele_setup_py = os.path.join(src, 'modele-setup.py')
                 cmd = []
-                with open(spconfig_py, 'r') as fin:
+                with open(modele_setup_py, 'r') as fin:
                     line = next(fin)
                     if line[0:2] == '#!':
                         python = line[2:].strip()
@@ -270,7 +269,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                             cmd.append(python)
 
                 try:
-                    cmd += [spconfig_py,
+                    cmd += [modele_setup_py,
                         '-DRUN=%s' % rundeck,
                         '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
                         src]
@@ -281,7 +280,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                 except OSError as err:
                     sys.stderr.write(' '.join(cmd) + '\n')
                     sys.stderr.write('%s\n' % err)
-                    raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'spconfig.py'))
+                    raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'modele-setup.py'))
                 subprocess.check_call(['make', 'install', '-j%d' % jobs])
         finally:
             if False:

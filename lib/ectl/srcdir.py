@@ -2,7 +2,7 @@ import os
 import re
 from ectl import xhash
 
-badRE = re.compile(r"\.git|\..*|doc|aux|init_cond|tests|pyext|pylib|decks|\.DS_Store|\.#.*|a\.out|.*\.o|spconfig\.py")
+badRE = re.compile(r"\.git|\..*|doc|aux|init_cond|tests|pyext|pylib|decks|\.DS_Store|\.#.*|a\.out|.*\.o|modele-setup\.py")
 
 def list_src_files(src_dir):
     # Add build files in top-level ModelE directory (above model/)

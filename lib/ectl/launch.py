@@ -14,6 +14,7 @@ from ectl import iso8601
 import datetime
 import netCDF4
 import collections
+import math
 
 def setup_parser(subparser):
     subparser.add_argument('run', nargs='?', default='.',
@@ -359,9 +360,21 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         print('Warning: Cannot load rundeck.R.  NOT rewriting I file')
 
     # -------- Construct the main command line
-    mpi_cmd = ['mpirun', '-timestamp-output']
-    mpi_cmd.append('-output-filename')
-    mpi_cmd.append(os.path.join(log_dir, 'q'))
+    mpi_cmd = ['mpirun', '-timestamp-output', '-merge-stderr-to-stdout',
+        '-output-filename', os.path.join(log_dir, 'log')]
+
+    # Symlink logfiles
+    intasks = int(ntasks)
+    if intasks == 1:
+        ndigits = 1
+    else:
+        ndigits = int(math.log10(intasks))+1
+    fmt = '{:0%dd}' % ndigits
+    rank_fmt = 'rank.' + fmt
+    for i in range(0,intasks):
+        real = os.path.join('log', '1', rank_fmt.format(i), 'stdout')
+        link = os.path.join(log_dir, fmt.format(i))
+        os.symlink(real, link)
 
     # ------- Delete timestamp.txt
     try:

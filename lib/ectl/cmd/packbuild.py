@@ -31,6 +31,7 @@ MODELE_CONTROL_FILES = [
     './cmake/DefinePlatformDefaults.cmake',
     './cmake/FindBlitz++.cmake',
     './cmake/FindCGAL.cmake',
+    './cmake/FindEverytrace.cmake',
     './cmake/FindFException.cmake',
     './cmake/FindFFTW.cmake',
     './cmake/FindGALAHAD.cmake',

@@ -240,8 +240,9 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
             # Unpack CMake build files if a modele-control.pyar file exists
             # Do not overwrite existing build files
             with ectl.util.working_dir(src):
-                if unpack and os.path.exists(MODELE_CONTROL_PYAR) and not os.path.exists('CMakeLists.txt'):
+                if unpack:
                     print('Adding files from modele-control.pyar')
+                    print('      ', os.path.realpath(MODELE_CONTROL_PYAR))
                     with open(MODELE_CONTROL_PYAR) as fin:
                         pyar.unpack_archive(fin, '.')
 
@@ -256,31 +257,42 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                     os.makedirs(build)
                 os.chdir(build)
 
-                # Read the shebang out of setup.py to get around 80-char limit
-                modele_setup_py = os.path.join(src, 'modele-setup.py')
-                cmd = []
-                with open(modele_setup_py, 'r') as fin:
-                    line = next(fin)
-                    if line[0:2] == '#!':
-                        python = line[2:].strip()
 
-                        # Make sure this looks like python, not something else
-                        if python.index('python') != 0:
-                            cmd.append(python)
+                # Only run CMake if no Makefile.  (If Makefile is out
+                # of date, CMake will automatically re-run with 'make'
+                # command)
+                if not os.path.exists('Makefile'):
 
-                try:
-                    cmd += [modele_setup_py,
-                        '-DRUN=%s' % rundeck,
-                        '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
-                        src]
-
+                    # Read the shebang out of setup.py to get around 80-char limit
+                    modele_setup_py = os.path.join(src, 'modele-setup.py')
                     env = dict(os.environ)
-                    del env['PYTHONPATH']    # Python2 in CMake build does its own thing
-                    subprocess.check_call(cmd, env=env)
-                except OSError as err:
-                    sys.stderr.write(' '.join(cmd) + '\n')
-                    sys.stderr.write('%s\n' % err)
-                    raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'modele-setup.py'))
+                    if False:
+                        cmd = []
+                        with open(modele_setup_py, 'r') as fin:
+                            line = next(fin)
+                            if line[0:2] == '#!':
+                                python = line[2:].strip()
+
+                                # Make sure this looks like python, not something else
+                                if python.index('python') != 0:
+                                    cmd.append(python)
+                        del env['PYTHONPATH']    # Python2 in CMake build does its own thing
+                    else:
+                        cmd = ['python3']
+
+                    try:
+                        cmd += [modele_setup_py,
+                            '-DRUNDECK=%s' % rundeck_R,
+                            '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
+                            src]
+                        print('setup calling', cmd)
+                        subprocess.check_call(cmd, env=env)
+                    except OSError as err:
+                        sys.stderr.write(' '.join(cmd) + '\n')
+                        sys.stderr.write('%s\n' % err)
+                        raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'modele-setup.py'))
+
+                # Now that we have a makefile, run make!
                 subprocess.check_call(['make', 'install', '-j%d' % jobs])
         finally:
             if False:

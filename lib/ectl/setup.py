@@ -48,6 +48,7 @@ def good_pkg_dir(pkg_dir):
 
 def set_link(src, dst):
     """Like doing ln -s src dst"""
+    print('set_link', src, dst)
     if os.path.islink(dst):
         if os.path.abspath(os.path.realpath(dst)) == os.path.abspath(src):
             return
@@ -55,6 +56,21 @@ def set_link(src, dst):
     src_rel = os.path.relpath(src, start=os.path.split(dst)[0])
     os.symlink(src_rel, dst)
 
+cmakeRE = re.compile('(.*?)=(.*)')
+def read_cmake_cache(fname):
+    vars = {}
+    try:
+        with open(fname, 'r') as fin:
+            for line in fin:
+                line = line.partition('#')[0].rstrip()
+                line = line.partition('//')[0].rstrip()
+                match = cmakeRE.match(line)
+                if match is not None:
+                    vars[match.group(1)] = match.group(2)
+    except:
+        pass
+
+    return vars
 
 def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True):
 
@@ -100,6 +116,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
     rundeck = new_rundeck or old.rundeck
     if rundeck is None:
         raise ValueError('No rundeck specified!')
+
     if (status.status > launchers.INITIAL) and (old.rundeck is not None) and (rundeck != old.rundeck):
         raise ValueError('Cannot change rundeck (to %s)' % (rundeck))
 #        tty.warn('Rundeck changing from %s to %s' % (old.rundeck, rundeck))
@@ -261,7 +278,13 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                 # Only run CMake if no Makefile.  (If Makefile is out
                 # of date, CMake will automatically re-run with 'make'
                 # command)
-                if not os.path.exists('Makefile'):
+                cmake = read_cmake_cache(os.path.join(pkg, 'CMakeCache.txt'))
+                run_cmake = ('CMAKE_INSTALL_PREFIX:PATH' not in cmake) \
+                    or (cmake['CMAKE_INSTALL_PREFIX:PATH'] != pkg) \
+                    or (not os.path.exists('Makefile')) \
+                    or args_rebuild
+                if run_cmake:
+                    print('============ CMake')
 
                     # Read the shebang out of setup.py to get around 80-char limit
                     modele_setup_py = os.path.join(src, 'modele-setup.py')
@@ -293,6 +316,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                         raise ValueError('Problem running %s.  Have you run spack setup on your source directory?' % os.path.join(src, 'modele-setup.py'))
 
                 # Now that we have a makefile, run make!
+                print('============ Make')
                 subprocess.check_call(['make', 'install', '-j%d' % jobs])
         finally:
             if False:

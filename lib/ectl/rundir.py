@@ -29,7 +29,7 @@ def detect_mpi(pkg):
 
 # --------------------------------------------------------------------
 slurmRE = re.compile('slurm(-(.+))?')
-def new_launcher(run, slauncher):
+def new_launcher(run, slauncher, np=None):
     """Launcher factory."""
 
     # Different kinds of Slurm profiles
@@ -38,10 +38,10 @@ def new_launcher(run, slauncher):
         profile = None
         if match.group(2) is not None:
             profile = match.group(2)
-        launcher = launchers.SlurmLauncher(run, profile=profile)
+        launcher = launchers.SlurmLauncher(run, profile=profile, np=np)
 
     elif slauncher == 'mpi':
-        launcher = launchers.MPILauncher(run)
+        launcher = launchers.MPILauncher(run, np=np)
 
     else:
         raise ValueError('Unrecognized launcher: {0}'.format(slauncher))

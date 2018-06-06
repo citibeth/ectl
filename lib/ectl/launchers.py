@@ -117,18 +117,20 @@ submittedRE = re.compile(r'Submitted batch job\s+(\d+)\s*')
 invalidJobRE = re.compile(r'.*?Invalid job id specified.*')
 class SlurmLauncher(object):
 
-    def __init__(self, run, profile=None):
+    def __init__(self, run, profile=None, np=None):
         self.run = os.path.abspath(run)
         if profile not in legal_profiles:
             raise ValueError('Illegal profile for SlurmLauncher: {0}'.format(profile))
         self.profile = profile
 
-    def __call__(self, mpi_cmd, modele_cmd, np=None, time=None, synchronous=False):
+        if np is None:
+            raise ValueError('Must specify number of MPI tasks when using Slurm')
+        self.np = np
+
+    def __call__(self, mpi_cmd, modele_cmd, time=None, synchronous=False):
         if synchronous:
             raise ValueError('SlurmLauncher does not currently support synchronous=True')
 
-        if np is None:
-            raise ValueError('Must specify number of MPI tasks when using Slurm')
         if time is None:
             raise ValueError('Must specify length of time to run when using Slurm')
 
@@ -147,7 +149,7 @@ class SlurmLauncher(object):
             sbatch_cmd = ['sbatch',
                 '--job-name={0}'.format(self.run), 
                 '--account=s1001',
-                '--ntasks={0}'.format(str(np)),
+                '--ntasks={0}'.format(str(self.np)),
                 '--time={0}'.format(time)]    # 1 minute
 
             if self.profile == 'debug':
@@ -206,10 +208,11 @@ class SlurmLauncher(object):
 
 psRE = re.compile(r'[^\s]+\s+([0-9]+)\s+.*')
 class MPILauncher(object):
-    def __init__(self, run):
+    def __init__(self, run, np=None):
         self.run = os.path.abspath(run)
+        self.np = int(np) if np is not None else detect_ncores()
 
-    def __call__(self, mpi_cmd, modele_cmd, np=None, time=None, synchronous=False):
+    def __call__(self, mpi_cmd, modele_cmd, time=None, synchronous=False):
         """time:
             Max time to run (ignored)
         synchronous: bool
@@ -218,8 +221,7 @@ class MPILauncher(object):
         with ectl.util.working_dir(self.run):
 
             # --------- determine number of processors to use
-            np = int(np) if np is not None else detect_ncores()
-            mpi_cmd.extend(['-np', str(np)])
+            mpi_cmd.extend(['-np', str(self.np)])
 
             # --------- Write out our launch
             modele_pid = os.path.join(self.run, 'modele.pid')

@@ -20,7 +20,7 @@ def setup_parser(subparser):
     subparser.add_argument('run', nargs='?', default='.',
         help='Directory of run to give execution command')
     subparser.add_argument('--timespan', '-ts', action='store', dest='timespan',
-        help='[iso8601],[iso8601],[iso8601] (start,end) Timespan to run it for')
+        help='(start,end) Timespan to run it for; times in iso8601 format eg 20180606T150647Z')
     subparser.add_argument('--force', '-f', action='store_true', dest='force',
         default=False,
         help='Overwrite run without asking (on start)')
@@ -298,7 +298,7 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
     # ---------------------------------
 
     modelexe = os.path.join(paths.run, 'pkg', 'bin', 'modelexe')
-    _launcher = rundir.new_launcher(paths.run, launcher)
+    _launcher = rundir.new_launcher(paths.run, launcher, np=ntasks)
 
     # -------- Determine log file(s)
     # Get non-symlinked log direcotry
@@ -364,14 +364,14 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         '-output-filename', os.path.join(log_dir, 'log')]
 
     # Symlink logfiles
-    intasks = int(ntasks)
-    if intasks == 1:
+
+    if _launcher.np == 1:
         ndigits = 1
     else:
-        ndigits = int(math.log10(intasks))+1
+        ndigits = int(math.log10(_launcher.np))+1
     fmt = '{:0%dd}' % ndigits
     rank_fmt = 'rank.' + fmt
-    for i in range(0,intasks):
+    for i in range(0,_launcher.np):
         real = os.path.join('log', '1', rank_fmt.format(i), 'stdout')
         link = os.path.join(log_dir, fmt.format(i))
         os.symlink(real, link)
@@ -392,7 +392,7 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         modele_cmd = modele_cmd + ['--time', str(net_time_s)]
 
     # ------- Run it!
-    _launcher(mpi_cmd, modele_cmd, np=ntasks, time=time, synchronous=synchronous)
+    _launcher(mpi_cmd, modele_cmd, time=time, synchronous=synchronous)
     if not synchronous:
         _launcher.wait()
         print_status(paths.run)

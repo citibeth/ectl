@@ -39,6 +39,10 @@ def setup_parser(subparser):
         help="Don't unpack the build system from pyar.")
     subparser.add_argument('--jobs', '-j', action='store', dest='jobs',
         help='Number of cores to use when building.')
+    subparser.add_argument('--python', action='store', dest='python', default='python3',
+        help='Name of Python command to use running build/setup scripts')
+    subparser.add_argument('--pythonpath', action='store', dest='pythonpath', default=None,
+        help='PYTHONPATH to use when running Python')
 
 
 def setup(parser, args, unknown_args):
@@ -49,4 +53,5 @@ def setup(parser, args, unknown_args):
     ectl.setup.setup(
         args.run, rundeck=args.rundeck, src=args.src,
         jobs=None if args.jobs is None else int(args.jobs),
-        pkgbuild=args.pkgbuild, rebuild=args.rebuild, unpack=args.unpack)
+        pkgbuild=args.pkgbuild, rebuild=args.rebuild, unpack=args.unpack,
+        python=args.python, pythonpath=args.pythonpath)

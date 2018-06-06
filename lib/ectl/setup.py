@@ -72,7 +72,7 @@ def read_cmake_cache(fname):
 
     return vars
 
-def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True):
+def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True, python='python3', pythonpath=None):
 
     # Move parameters to different name to maintain SSA coding style below.
     args_run = run
@@ -289,23 +289,14 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                     # Read the shebang out of setup.py to get around 80-char limit
                     modele_setup_py = os.path.join(src, 'modele-setup.py')
                     env = dict(os.environ)
-                    if False:
-                        cmd = []
-                        with open(modele_setup_py, 'r') as fin:
-                            line = next(fin)
-                            if line[0:2] == '#!':
-                                python = line[2:].strip()
-
-                                # Make sure this looks like python, not something else
-                                if python.index('python') != 0:
-                                    cmd.append(python)
-                        del env['PYTHONPATH']    # Python2 in CMake build does its own thing
-                    else:
-                        cmd = ['python3']
+                    cmd = [python]   # From args
+                    if pythonpath is not None:
+                        env['PYTHONPATH'] = pythonpath
 
                     try:
                         cmd += [modele_setup_py,
                             '-DRUNDECK=%s' % rundeck_R,
+                            '-DRUN=%s' % rundeck_R,    # Compatibility with old builds
                             '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
                             src]
                         print('setup calling', cmd)

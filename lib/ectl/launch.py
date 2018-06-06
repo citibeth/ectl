@@ -15,6 +15,7 @@ import datetime
 import netCDF4
 import collections
 import math
+import traceback
 
 def setup_parser(subparser):
     subparser.add_argument('run', nargs='?', default='.',
@@ -113,13 +114,15 @@ def run(args, cmd):
     if hasattr(args, 'restart_file'):
         kwargs['restart_file'] = args.restart_file
 
+    ntasks = None if args.np is None else int(args.np)
+
     if args.resume:
         ectl.launch.launch(args.run, launcher=args.launcher,
-            ntasks=args.np, time=args.time,
+            ntasks=ntasks, time=args.time,
             keep_I=True, add_keepalive=False)
     else:
         launch(args.run, launcher=args.launcher, force=args.force,
-            ntasks=args.np, time=args.time,
+            ntasks=ntasks, time=args.time,
             rundeck_modifys=[lambda rd, cold_start: rd_set_ts(rd, cold_start, start_ts, end_ts)],
             cold_start=(cmd == 'start'), **kwargs)
 
@@ -313,7 +316,8 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             print('****** Reading rundeck.R')
             git = executable.which('git')
 
-            rd = rundeck.load(os.path.join(paths.run, 'config', 'rundeck.R'), modele_root=paths.src)
+            config_dir = os.path.join(paths.run, 'config')
+            rd = rundeck.load(os.path.join(config_dir, 'rundeck.R'), modele_root=paths.src)
             download_dir=ectl.paths.default_file[0]
             rd.params.files.resolve(file_path=ectl.paths.default_file,
                 download_dir=download_dir)
@@ -329,14 +333,14 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             rd.params.inputz_cold.clear()
 
             # Make sure the .cdl files are in git
-            with ectl.util.working_dir('config'):
+            with ectl.util.working_dir(config_dir):
                 cdls = [x for x in os.listdir('.') if x.endswith('.cdl')]
                 if len(cdls) > 0:
                     git('add', *cdls)
 
-            # Convert .cdl files to .nc
-            # (while getting absolute path of files)
-            cdl_files_good = ectl.cdlparams.resolve_cdls_in_dir('config', download_dir=download_dir)
+                # Convert .cdl files to .nc
+                # (while getting absolute path of files)
+                cdl_files_good = ectl.cdlparams.resolve_cdls_in_dir('.', download_dir=download_dir)
 
         # Set ISTART and restart file in I file
         rd.params.inputz.set('ISTART', str(start_type))
@@ -356,7 +360,8 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         if not cdl_files_good:
             raise Exception('One or more input files in a .cdl config cannot be found')
 
-    except IOError:
+    except IOError as ioe:
+        traceback.print_exc()
         print('Warning: Cannot load rundeck.R.  NOT rewriting I file')
 
     # -------- Construct the main command line

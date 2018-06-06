@@ -122,14 +122,14 @@ class SlurmLauncher(object):
         if profile not in legal_profiles:
             raise ValueError('Illegal profile for SlurmLauncher: {0}'.format(profile))
         self.profile = profile
-
-        if np is None:
-            raise ValueError('Must specify number of MPI tasks when using Slurm')
         self.np = np
 
     def __call__(self, mpi_cmd, modele_cmd, time=None, synchronous=False):
         if synchronous:
             raise ValueError('SlurmLauncher does not currently support synchronous=True')
+
+        if self.np is None:
+            raise ValueError('Must specify number of MPI tasks when using Slurm')
 
         if time is None:
             raise ValueError('Must specify length of time to run when using Slurm')
@@ -145,7 +145,6 @@ class SlurmLauncher(object):
             # See: http://stackoverflow.com/questions/29661527/how-to-spawn-detached-background-process-on-linux-in-either-bash-or-python
 
             cmd_str = ' '.join(mpi_cmd + modele_cmd)
-            print(cmd_str)
             sbatch_cmd = ['sbatch',
                 '--job-name={0}'.format(self.run), 
                 '--account=s1001',
@@ -156,13 +155,21 @@ class SlurmLauncher(object):
                 sbatch_cmd.append('--qos=debug')
 
             proc = subprocess.Popen(sbatch_cmd,
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             batch_script = '\n'.join([
                 '#!/bin/sh',
                 '#',
                 '',
                 cmd_str])
             (sout, serr) = proc.communicate(batch_script.encode())
+            if len(serr) > 0:
+                print(' '.join(sbatch_cmd))
+                print('------------------------------------------')
+                print(batch_script)
+                print('------------------------------------------')
+                sys.stdout.flush()
+                raise IOError(serr.decode())
+
             match = submittedRE.match(sout.decode())
             sjobid = match.group(1)
 

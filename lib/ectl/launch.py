@@ -160,7 +160,7 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
     run: str
         Run directory to launch.
     launcher: str
-        Name of launcher to use (default: $ETL_LAUNCHER env var)
+        Name of launcher to use (default: $ECTL_LAUNCHER env var)
     force: bool
         On restart, overwrite stopped runs without asking user?
     ntasks: int

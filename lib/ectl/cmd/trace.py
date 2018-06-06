@@ -2,6 +2,7 @@ import argparse
 import os
 import subprocess
 import sys
+import glob
 
 description = 'Get a backtrace for a run'
 
@@ -26,10 +27,7 @@ def trace(parser, args, unknown_args):
     logdir = os.path.join(run, logleaf)
 
 
-    logfiles = []
-    for leaf in os.listdir(logdir):
-        if leaf[:2] == 'q.':
-            logfiles.append(os.path.join(logdir, leaf))
+    logfiles = glob.glob(os.path.join(logdir, 'log', '1', 'rank.*', 'stdout'))
     cmd = ['etr'] + sorted(logfiles)
 
     print('cmd', cmd)

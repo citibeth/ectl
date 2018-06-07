@@ -1,6 +1,23 @@
 from __future__ import print_function
 import os
 from ectl import pathutil
+import re
+import subprocess
+
+mpiRE = re.compile(r'(mpirun \(Open MPI\) (\d+)\.(\d+)\.(\d+)).*', re.MULTILINE)
+def get_mpi_vendorver():
+    """Returns a tuple (MPIVendor, Version)"""
+    proc = subprocess.Popen(['mpirun', '-version'],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    (sout, serr) = proc.communicate()
+    sout = sout.decode()
+    serr = serr.decode()
+
+    match = mpiRE.match(sout)
+    if match is None:
+        raise RuntimeError('Cannot determine MPI vendor and version: {}'.format(sout))
+    if match.group(1) is not None:
+        return ( 'openmpi',   (int(match.group(2)), int(match.group(3)), int(match.group(4))) )
 
 
 class Config(object):

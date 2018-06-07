@@ -26,8 +26,12 @@ def trace(parser, args, unknown_args):
         logleaf = 'log%02d' % int(args.logno)
     logdir = os.path.join(run, logleaf)
 
+    # OpenMPI v3
+    # logfiles = glob.glob(os.path.join(logdir, 'log', '1', 'rank.*', 'stdout'))
 
-    logfiles = glob.glob(os.path.join(logdir, 'log', '1', 'rank.*', 'stdout'))
+    digitsRE = re.compile(r'\d+')
+    # Use the symlinks, which should be the same for all MPI versions
+    logfiles = [x for x in os.listdir(logdir) if digitsRE.match(x) is not None]
     cmd = ['etr'] + sorted(logfiles)
 
     print('cmd', cmd)

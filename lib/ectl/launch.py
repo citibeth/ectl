@@ -1,7 +1,6 @@
 from __future__ import print_function
 import copy
 import os
-import subprocess
 import re
 from ectl import pathutil,rundeck,rundir,xhash,launchers
 import ectl.cdlparams
@@ -16,6 +15,8 @@ import netCDF4
 import collections
 import math
 import traceback
+import subprocess
+import ectl.config
 
 def setup_parser(subparser):
     subparser.add_argument('run', nargs='?', default='.',
@@ -151,6 +152,54 @@ COLD = object()
 #                return os.path.join(dir, file)
 #
 #    raise ValueError('No matching rsf file for date {0}'.format(dt))
+
+
+
+def make_mpi_cmd(vendorver, log_dir):
+    vendor,version = vendorver
+    if vendor == 'openmpi':
+        if version[0] == 1:
+            return ['mpirun', '-timestamp-output', '-output-filename', os.path.join(log_dir, 'q')]
+
+        if version[0] == 3:
+            return ['mpirun', '-timestamp-output', '-merge-stderr-to-stdout',
+                '-output-filename', os.path.join(log_dir, 'log')]
+
+    raise RuntimeError("I don't know how to construct an MPI command for MPI version {} {}".format(vendor, version))
+
+
+def get_rank_format(np):
+    """Susses out the number of digits used by MPI to create rank numbers,
+    based on the total number of processors"""
+    if np == 1:
+        ndigits = 1
+    else:
+        ndigits = int(math.log10(np))+1
+    return '{:0%dd}' % ndigits
+
+def make_mpi_symlinks(vendorver, log_dir, np):
+
+    # Symlink logfiles
+    if vendorver[0] == 'openmpi':
+        if vendorver[1][0] == 1:
+            fmt = get_rank_format(np)
+            for i in range(0,np):
+                real = ('q.1.' + fmt).format(i)
+                link = os.path.join(log_dir, fmt.format(i))
+                os.symlink(real, link)
+            return
+
+        if vendorver[1][0] == 3:
+            fmt = get_rank_format(np)
+            rank_fmt = 'rank.' + fmt
+            for i in range(0,_launcher.np):
+                real = os.path.join('log', '1', rank_fmt.format(i), 'stdout')
+                link = os.path.join(log_dir, fmt.format(i))
+                os.symlink(real, link)
+            return
+
+    raise RuntimeError("I don't know how to construct symlinks for MPI version {} {}".format(vendor, version))
+
 
 def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modifys=list(),
     cold_start=False, keep_I=False, restart_file=None, restart_date=None,
@@ -365,21 +414,10 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
         print('Warning: Cannot load rundeck.R.  NOT rewriting I file')
 
     # -------- Construct the main command line
-    mpi_cmd = ['mpirun', '-timestamp-output', '-merge-stderr-to-stdout',
-        '-output-filename', os.path.join(log_dir, 'log')]
+    vendorver = ectl.config.get_mpi_vendorver()
+    mpi_cmd = make_mpi_cmd(vendorver, log_dir)
+    make_mpi_symlinks(vendorver, log_dir, _launcher.np)
 
-    # Symlink logfiles
-
-    if _launcher.np == 1:
-        ndigits = 1
-    else:
-        ndigits = int(math.log10(_launcher.np))+1
-    fmt = '{:0%dd}' % ndigits
-    rank_fmt = 'rank.' + fmt
-    for i in range(0,_launcher.np):
-        real = os.path.join('log', '1', rank_fmt.format(i), 'stdout')
-        link = os.path.join(log_dir, fmt.format(i))
-        os.symlink(real, link)
 
     # ------- Delete timestamp.txt
     try:

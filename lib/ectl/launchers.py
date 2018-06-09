@@ -146,6 +146,7 @@ class SlurmLauncher(object):
 
             cmd_str = ' '.join(mpi_cmd + modele_cmd)
             sbatch_cmd = ['sbatch',
+                '--constraint=hasw',    # See below:  Differences in debug QoS? ISSUE=58192
                 '--job-name={0}'.format(self.run), 
                 '--account=s1001',
                 '--ntasks={0}'.format(str(self.np)),
@@ -327,3 +328,73 @@ class MPILauncher(object):
         except subprocess.CalledProcessError:
             out.write('<No Running Processes>\n')
 
+
+
+
+# =========================================================================
+# Email chain with NCCS (discover) Support, over problems with MPI_Init:
+#      Returned value Error (-1) instead of ORTE_SUCCESS
+# 
+# Subject: Differences in debug QoS? ISSUE=58192
+# 
+# Elizabeth 2016-04-25
+# --------------------
+# 
+# I have a program that... when I run it on the debug QoS (42 cores, 1h
+# requested time), it works.  But when I run it on the main QoS (42
+# cores, 10h requested time), it starts but fails immediately when
+# trying to initialize MPI.  This is with exactly the same binaries in
+# the same location on the filesystem.  The only difference is I add
+# --qos=debug to the sbatch command.
+# 
+# 
+# Nick 2016-04-26
+# ---------------
+# 
+# I used the module combination other/comp/gcc-5.3-sp3 and
+# other/mpi/openmpi/1.10.1-gcc-5.3-sp3 to run a helloWorld application
+# successfully, both on Haswell and Sandybridge type of nodes.  The ldd
+# command shows that your program depends on lot of packages, these
+# packages and your program should compiled in sp3 environment (not on
+# dali node) and then run in sp3 environment.  Also, you could specify
+# the job to run on Haswell nodes by specifying --constraint=hasw.
+# Running the program in debug qos or other qos should not make
+# difference.
+# 
+# Elizabeth 2016-04-27
+# --------------------
+# 
+# As for this issue... I'm logging into discover-sp3, and doing my build
+# there.  But I'm not specifying '--constraint=hasw' when I run.  I have
+# noticed that SOMETIMES my jobs DO work when not running debug.  My
+# best guess is that for whatever reason, my binary does not work on
+# Sandy Bridge nodes.  So I will try adding '--constraint=hasw' and see
+# if that can work.
+# 
+# When I run with --constraint=debug, does that normally provide a Haswell node?
+# 
+# Nick 2016-04-27
+# ---------------
+# 
+# If you don't specify --constraint=hasw with your jobs, there is a
+# chance that your job can land on older sandybridge nodes with SP3.  My
+# best guess is that you are running into an issue with code compiled on
+# haswell nodes not running correctly on the sandybridge nodes which
+# while having SP3 have an older version of the IB cards (mlx4 in
+# sandybridge vs mlx5 in haswell).
+# 
+# There is no --constraint=debug.  "debug" is a QoS and can be specified
+# via --qos=debug.  It makes no determination on the node type, it is simply
+# a way to get priority access to up to 532 cores (19 haswell nodes or 33
+# sandybridge nodes) for up to 1 hour for debugging jobs.  You could in theory
+# build on sandybridge nodes and see if you can get that same binary to
+# run on the haswell nodes, but the underlying issue is still the difference
+# in hardware I believe.
+# 
+# In theory it is possible to produce binaries that should run on both
+# haswell and sandybridge, but in practice I have found that openmpi
+# tends to produce binaries that will only work on one or the other
+# node type (again, I am not an application programmer, just one of the
+# admins so I am not entirely sure how this can be fixed).
+# 
+# =========================================================================

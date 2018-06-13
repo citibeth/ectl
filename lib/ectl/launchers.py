@@ -15,6 +15,7 @@ import signal
 from six import StringIO
 import time
 import ectl.util
+import spack.util.executable
 
 NONE=0
 INITIAL=1
@@ -145,7 +146,7 @@ class SlurmLauncher(object):
             # See: http://stackoverflow.com/questions/29661527/how-to-spawn-detached-background-process-on-linux-in-either-bash-or-python
 
             cmd_str = ' '.join(mpi_cmd + modele_cmd)
-            sbatch_cmd = ['sbatch',
+            sbatch_cmd = [str(spack.util.executable.which('sbatch')),
                 '--constraint=hasw',    # See below:  Differences in debug QoS? ISSUE=58192
                 '--job-name={0}'.format(self.run), 
                 '--account=s1001',
@@ -156,11 +157,14 @@ class SlurmLauncher(object):
                 sbatch_cmd.append('--qos=debug')
 
             proc = subprocess.Popen(sbatch_cmd,
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
             batch_script = '\n'.join([
                 '#!/bin/sh',
                 '#',
                 '',
+                'ulimit -s unlimited',   # Needed on discover; see note below on NCCS ISSUE=68758
                 cmd_str])
             (sout, serr) = proc.communicate(batch_script.encode())
             if len(serr) > 0:
@@ -398,3 +402,174 @@ class MPILauncher(object):
 # admins so I am not entirely sure how this can be fixed).
 # 
 # =========================================================================
+# =========================================================================
+#
+# See email with NCCS ISSUE=68758 from 2018-06-12
+#
+# SUMMARY
+# =======
+# 
+# Could not run even a simple "hello world" MPI program; failed on MPI_Init() on discover.
+# 
+# RELEVANT DETAILS
+# ================
+# 
+# 1. Launch a demo shell on the cluster using:
+#       salloc -N 1 --qos=debug --constraint=hasw
+# 
+# 2. Compile and run the demo program:
+#       mpicc -o mpitest mpitest.c
+#       mpirun -np 1 mpitest   # works
+#       mpirun -np 2 mpitest   # works
+#       mpirun -np 28 mpitest  # Doesn't work
+# 
+# CONCLUSION
+# ==========
+# 
+# Running MPI with multiple processes requires a bigger stack.  Solve that problem with:
+#       ulimit -s unlimited
+# 
+# 
+# ORIGINAL PROBLEM STATEMENT
+# ==========================
+# 
+# I cannot build and successfully run a simple "Hello World" MPI program on
+# discover using the modules:
+# 
+# module load other/comp/gcc-5.3-sp3
+# module load other/mpi/openmpi/1.10.1-gcc-5.3-sp3
+# 
+# I conclude that either (a) something is wrong with my environment
+# variables, or (b) this version of GCC+OpenMPI just does not work on
+# discover.
+# 
+# Can you please look at this and suggest possible ways forward?  Is there
+# another GCC/MPI combination you would recommend using instead?
+# Reproducible steps to repeat the problem are below; you can also look in
+# 
+# ~rpfische/exp/1806-testing/mpitest
+# 
+# Thank you,
+# -- Elizabeth
+# 
+# # ------------ Log into discover (see ~rpfische/.bashrc, etc.)
+# 
+# # ----------- Create MPI Hello World Source Code
+# $ cat >mpitest.c
+# 
+# #include <mpi.h>
+# #include <stdio.h>
+# 
+# int main(int argc, char** argv) {
+#     // Initialize the MPI environment
+#     MPI_Init(NULL, NULL);
+# 
+#     // Get the number of processes
+#     int world_size;
+#     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+# 
+#     // Get the rank of the process
+#     int world_rank;
+#     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+# 
+#     // Get the name of the processor
+#     char processor_name[MPI_MAX_PROCESSOR_NAME];
+#     int name_len;
+#     MPI_Get_processor_name(processor_name, &name_len);
+# 
+#     // Print off a hello world message
+#     printf("Hello world from processor %s, rank %d out of %d processors\n",
+#            processor_name, world_rank, world_size);
+# 
+#     // Finalize the MPI environment.
+#     MPI_Finalize();
+# }
+# 
+# # ----------- Create the MPI Hello World exectuable
+# $ cd ~/exp/1806-testing/mpitest
+# $ module load other/comp/gcc-5.3-sp3
+# $ module load other/mpi/openmpi/1.10.1-gcc-5.3-sp3
+# $ mpicc -o mpitest mpitest.c
+# 
+# # ----------- Run the executable on local node
+# $ ./mpitest
+# Hello world from processor discover32, rank 0 out of 1 processors
+# 
+# $ mpirun -np 2 ./mpitest
+# Hello world from processor discover32, rank 1 out of 2 processors
+# Hello world from processor discover32, rank 0 out of 2 processors
+# 
+# # ---------- Create Slurm batch script
+# $ cat >job
+# #!/bin/sh
+# #
+# 
+# module load other/comp/gcc-5.3-sp3
+# module load other/mpi/openmpi/1.10.1-gcc-5.3-sp3
+# export TMPDIR=/tmp
+# export LOCAL_TMPDIR=/tmp
+# cd /home/rpfische/exp/1806-testing/mpitest
+# printenv
+# 
+# /usr/local/other/SLES11.3/openmpi/1.10.1/gcc-5.3/bin/mpirun
+# -timestamp-output -output-filename
+# /gpfsm/dnb53/rpfische/exp/1806-testing/mpitest/log/q
+# /home/rpfische/exp/1806-testing/mpitest/mpitest
+# 
+# # __EOF__
+# 
+# # ----------- Run with slurm
+# 
+# $ /usr/slurm/bin/sbatch --constraint=hasw --job-name=test1 --account=s1001
+# --ntasks=28 --time=5 --qos=debug ./job
+# 
+# # ------------ Inspect the output
+# $ cat slurm-24923434.out
+# ...
+# -------------------------------------------------------
+# Primary job  terminated normally, but 1 process returned
+# a non-zero exit code.. Per user-direction, the job has been aborted.
+# -------------------------------------------------------
+# ________________________________________________________________
+# Job Resource Usage Summary for 24923434
+# Note: SLURM doesn't account for the exact same resource types as PBS.
+#       Also, you may see some values missing or zero, typically for
+#       very short jobs.  However, please do contact NCCS USG if you
+#       think the values below are in error.
+# 
+#   CPU Time Used : 00:00:00
+#   Memory Used : 1600K
+#   Virtual Memory Used : 100752K
+#   Walltime Used : 00:00:00
+# 
+#   Memory Requested : 0n (n=per node; c=per core)
+#   CPUs Requested / Allocated : 0 / 0
+#   Walltime Requested :
+# 
+#   Execution Queue :
+#   Head Node : borgo173
+#   Charged to : s1001
+# 
+#   Job Stopped : Tue Jun 12 12:08:35 EDT 2018
+# 
+# $ cat log/q.1.26
+# Tue Jun 12 12:08:35
+# 2018<stderr>:--------------------------------------------------------------------------
+# Tue Jun 12 12:08:35 2018<stderr>:It looks like orte_init failed for some
+# reason; your parallel process is
+# Tue Jun 12 12:08:35 2018<stderr>:likely to abort.  There are many reasons
+# that a parallel process can
+# Tue Jun 12 12:08:35 2018<stderr>:fail during orte_init; some of which are
+# due to configuration or
+# Tue Jun 12 12:08:35 2018<stderr>:environment problems.  This failure
+# appears to be an internal failure;
+# Tue Jun 12 12:08:35 2018<stderr>:here's some additional information (which
+# may only be relevant to an
+# Tue Jun 12 12:08:35 2018<stderr>:Open MPI developer):
+# Tue Jun 12 12:08:35 2018<stderr>:
+# Tue Jun 12 12:08:35 2018<stderr>:  orte progress thread start failed
+# Tue Jun 12 12:08:35 2018<stderr>:  --> Returned value Error (-1) instead of
+# ORTE_SUCCESS
+# Tue Jun 12 12:08:35
+# 2018<stderr>:--------------------------------------------------------------------------
+# ...

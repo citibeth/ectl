@@ -6,6 +6,7 @@ from ectl import pathutil,rundeck,rundir,xhash,launchers
 import ectl.cdlparams
 import sys
 from spack.util import executable
+import spack.util.executable
 import ectl
 import ectl.util
 import shutil
@@ -158,11 +159,13 @@ COLD = object()
 def make_mpi_cmd(vendorver, log_dir):
     vendor,version = vendorver
     if vendor == 'openmpi':
+        mpirun = str(spack.util.executable.which('mpirun'))
+
         if version[0] == 1:
-            return ['mpirun', '-timestamp-output', '-output-filename', os.path.join(log_dir, 'q')]
+            return [mpirun, '-timestamp-output', '-output-filename', os.path.join(log_dir, 'q')]
 
         if version[0] == 3:
-            return ['mpirun', '-timestamp-output', '-merge-stderr-to-stdout',
+            return [mpirun, '-timestamp-output', '-merge-stderr-to-stdout',
                 '-output-filename', os.path.join(log_dir, 'log')]
 
     raise RuntimeError("I don't know how to construct an MPI command for MPI version {} {}".format(vendor, version))

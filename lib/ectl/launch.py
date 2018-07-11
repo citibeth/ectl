@@ -195,7 +195,7 @@ def make_mpi_symlinks(vendorver, log_dir, np):
         if vendorver[1][0] == 3:
             fmt = get_rank_format(np)
             rank_fmt = 'rank.' + fmt
-            for i in range(0,_launcher.np):
+            for i in range(0,np):
                 real = os.path.join('log', '1', rank_fmt.format(i), 'stdout')
                 link = os.path.join(log_dir, fmt.format(i))
                 os.symlink(real, link)

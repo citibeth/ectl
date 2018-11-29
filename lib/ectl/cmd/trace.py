@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import glob
+import re
 
 description = 'Get a backtrace for a run'
 
@@ -31,7 +32,7 @@ def trace(parser, args, unknown_args):
 
     digitsRE = re.compile(r'\d+')
     # Use the symlinks, which should be the same for all MPI versions
-    logfiles = [x for x in os.listdir(logdir) if digitsRE.match(x) is not None]
+    logfiles = [os.path.join(logdir,x) for x in os.listdir(logdir) if digitsRE.match(x) is not None]
     cmd = ['etr'] + sorted(logfiles)
 
     print('cmd', cmd)

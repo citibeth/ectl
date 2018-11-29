@@ -257,7 +257,9 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
             # Unpack CMake build files if a modele-control.pyar file exists
             # Do not overwrite existing build files
             with ectl.util.working_dir(src):
-                if unpack:
+                # if MODELE_CONTROL_PYAR does not exist, this might be an older branch
+                # that had the build files already unpack.  Proceed under that assumption...
+                if unpack and os.path.exists(MODELE_CONTROL_PYAR):
                     print('Adding files from modele-control.pyar')
                     print('      ', os.path.realpath(MODELE_CONTROL_PYAR))
                     with open(MODELE_CONTROL_PYAR) as fin:

@@ -72,7 +72,7 @@ def read_cmake_cache(fname):
 
     return vars
 
-def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True, python='python3', pythonpath=None):
+def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True, python='python3', pythonpath=None, extra_args=[]):
 
     # Move parameters to different name to maintain SSA coding style below.
     args_run = run
@@ -280,6 +280,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                 # Only run CMake if no Makefile.  (If Makefile is out
                 # of date, CMake will automatically re-run with 'make'
                 # command)
+                print('xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx', pkg)
                 cmake = read_cmake_cache(os.path.join(pkg, 'CMakeCache.txt'))
                 run_cmake = ('CMAKE_INSTALL_PREFIX:PATH' not in cmake) \
                     or (cmake['CMAKE_INSTALL_PREFIX:PATH'] != pkg) \
@@ -301,6 +302,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                             '-DRUN=%s' % rundeck_R,    # Compatibility with old builds
                             '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
                             src]
+                        cmd += extra_args
                         print('setup calling', cmd)
                         subprocess.check_call(cmd, env=env)
                     except OSError as err:

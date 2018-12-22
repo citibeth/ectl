@@ -90,7 +90,7 @@ def run(args, cmd):
     """Top-level that parses command line arguments
 
     cmd: 'start', 'run'
-        User-level command calling this
+        Whether we should do a ModelE code start or warm start
     rsf:
         Name of restart file"""
 
@@ -108,9 +108,6 @@ def run(args, cmd):
             raise ValueError('Invalid timespan %s' % args.timespan)
 
     # ------ Parse Arguments
-    if hasattr(args, 'start') and args.start:
-        cmd = 'start'
-
     # Launcher to use
     kwargs = dict()
     if hasattr(args, 'restart_file'):

@@ -261,7 +261,8 @@ class MPILauncher(object):
             # file.  If mpirun did not, then we'd need to do more complex
             # daemonization stuff.  For example:
             #      https://github.com/thesharp/daemonize
-            cmd = ([] if synchronous else ['nohup'])  + mpi_cmd + modele_cmd
+            # cmd = ([] if synchronous else ['nohup'])  + mpi_cmd + modele_cmd
+            cmd = ['nohup'] + mpi_cmd + modele_cmd
             proc = subprocess.Popen(cmd) #, preexec_fn=os.setpgrp)
             if synchronous:
                 proc.wait()

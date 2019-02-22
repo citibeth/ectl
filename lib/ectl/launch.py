@@ -51,8 +51,9 @@ def rsf_type(rsf):
     """Determines whether a restart file is a .rsf or fort.X.nc file."""
 
     with netCDF4.Dataset(rsf, 'r') as nc:
-        if 'last_itime' not in nc.variables:
-            raise ValueError('File {} does not seem to be a checkpoint or restart file'.format(rsf))
+        # This is only the case when using Lynch-Stieglitz landice
+        # if 'last_itime' not in nc.variables:
+        #     raise ValueError('File {} does not seem to be a checkpoint or restart file'.format(rsf))
         if 'aij' in nc.variables:
             return START_CHECKPOINT
         else:

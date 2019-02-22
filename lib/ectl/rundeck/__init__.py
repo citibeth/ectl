@@ -142,7 +142,7 @@ class NamelistParams(BaseParams):
             minutes = 0
             seconds = 0
 
-        return tuple(
+        return (
             self['YEAR'+suffix].parsed,
             self['MONTH'+suffix].parsed,
             self['DATE'+suffix].parsed,
@@ -191,7 +191,7 @@ class NamelistParams(BaseParams):
         self[key] = param
 
     def __getitem__(self, name):
-        return super().__getitem__(name.lower())
+        return super().__getitem__(name)
 
 class FileParams(BaseParams):
     def set(self, key, value, line=None):

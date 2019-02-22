@@ -72,7 +72,7 @@ def read_cmake_cache(fname):
 
     return vars
 
-def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True, python='python3', pythonpath=None, extra_args=[]):
+def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True, python='python3', pythonpath=None, extra_cmake_args=[]):
 
     # Move parameters to different name to maintain SSA coding style below.
     args_run = run
@@ -302,7 +302,7 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                             '-DRUN=%s' % rundeck_R,    # Compatibility with old builds
                             '-DCMAKE_INSTALL_PREFIX=%s' % pkg,
                             src]
-                        cmd += extra_args
+                        cmd += extra_cmake_args
                         print('setup calling', cmd)
                         subprocess.check_call(cmd, env=env)
                     except OSError as err:

@@ -292,6 +292,18 @@ ModelE-Control shows run status:
    rpfische   443 86.8  0.1 13635064 245040 pts/9 Dl   17:31   0:00 /gpfsm/dnb53/rpfische/exp/test/pkg/bin/modelexe -cold-restart -i I
    rpfische   445 92.2  0.1 13624436 242348 pts/9 Rl   17:31   0:00 /gpfsm/dnb53/rpfische/exp/test/pkg/bin/modelexe -cold-restart -i I
 
+Running with Slurm Debug Mode
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+On discover, it's often preferable to try things out in the Slurm
+debug queue, allowing for quick turnaround.  This can be done with the
+``--launcher flag``, for example:
+
+.. code-block:: console
+
+   $ ectl run -ts 19491231T2200,19510101T0100 -np 6 -t 2 --launcher slurm-debug
+
+
 View the Log
 ------------
 

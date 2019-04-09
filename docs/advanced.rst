@@ -143,6 +143,7 @@ have reached their SLURM time limit.  To use it:
 .. code-block:: console
 
    $ ectl keepalive <ectl-root> --time 12:00:00 -np 28
+   $ ectl keepalive -np 6 -l slurm-debug -t 3 --every 1
 
 .. note::
 
@@ -152,11 +153,17 @@ have reached their SLURM time limit.  To use it:
    #. As with ``ectl run``, you need to re-specify the arguments
       ``--launcher``, ``--ntasks`` and ``--time``.
 
-   #. This command is intended to run periodically --- say, every 5
-      minutes, from a cron job.
-
    #. ``ectl keepalive`` will not restart jobs that have terminated on
       their own, or crashed, or were forcibly evicted from your cluster.
+
+   #. In order to be effective, ``ectl keepalive`` must be run
+      periodically; say, every 5 minutes.  This can be done from a
+      cron job (but remember to load the required Python modules
+      first).  Alternately, ``ectl keepalive`` can keep itself going
+      with the ``--every``.  This can be effective, if it is run from
+      within a long-running session of GNU screen.
+
+
 
 
 Create a Rundeck

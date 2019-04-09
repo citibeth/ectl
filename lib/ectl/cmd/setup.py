@@ -51,4 +51,4 @@ def setup(parser, args, unknown_args):
         args.run, rundeck=args.rundeck, src=args.src,
         jobs=None if args.jobs is None else int(args.jobs),
         pkgbuild=args.pkgbuild, rebuild=args.rebuild, unpack=args.unpack,
-        python=args.python, pythonpath=args.pythonpath, extra_args=unknown_args)
+        python=args.python, pythonpath=args.pythonpath, extra_cmake_args=unknown_args)

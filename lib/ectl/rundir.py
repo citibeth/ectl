@@ -171,6 +171,7 @@ class Status(object):
 
     def _get_status(self):
         # Make sure the run has been set up.
+        print('getting status for {}'.format(self.run))
         if not os.path.exists(self.run):
             return launchers.NONE
         if not os.path.exists(os.path.join(self.run, 'I')):

@@ -4,7 +4,7 @@ import ectl.rundir
 import ectl.logdir
 import ectl.launch
 import llnl.util.lock
-from ectl import launchers
+from ectl import launchers,mpivendors
 
 def load(keepalive):
     runs = []
@@ -27,7 +27,7 @@ def check(args, runs):
     oruns = []    # List of runs we will return
     for run in runs:
         status = ectl.rundir.Status(run)
-        print('Run:', status.sstatus, run)
+        print('Keepalive found Run: status={}, dir={}'.format(status.sstatus, run))
 
         # If it's running, queued, etc... keep going
         if status.status < launchers.STOPPED:
@@ -42,7 +42,9 @@ def check(args, runs):
         if status.status == launchers.STOPPED:
             # Find out why it's stopped
             latest_logdir = ectl.rundir.latest_logdir(run)
-            logfile = ectl.logdir.logfiles(latest_logdir)[0]
+            print('Found latest logdir: {}'.format(latest_logdir))
+            mpi = mpivendors.read_mpi_vendor(latest_logdir)
+            logfile = mpi.logfiles(latest_logdir)[0]
             digs = ectl.logdir.dig_logfile(logfile,
                 [ectl.logdir.DigExitReason()],
                 tail_bytes=10000)

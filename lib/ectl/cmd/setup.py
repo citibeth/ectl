@@ -28,10 +28,12 @@ def setup_parser(subparser):
     subparser.add_argument(
         'run', help='Directory of run to setup')
     subparser.add_argument('--rundeck', '-rd', action='store', dest='rundeck',
-        help='Rundeck to use in setup')
+        help='Rundeck to use in setup.  (If no path, look in the source template directory)')
     subparser.add_argument('--src', '-s', action='store', dest='src',
         help='Top-level directory of ModelE source')
     subparser.add_argument('--pkgbuild', action='store_true', dest='pkgbuild', default=False,
+        help='Name package dir after build dir.')
+    subparser.add_argument('--nobuild', action='store_false', dest='build', default=True,
         help='Name package dir after build dir.')
     subparser.add_argument('--rebuild', action='store_true', dest='rebuild', default=False,
         help='Rebuild the package, even if it seems to be fine.')
@@ -51,4 +53,4 @@ def setup(parser, args, unknown_args):
         args.run, rundeck=args.rundeck, src=args.src,
         jobs=None if args.jobs is None else int(args.jobs),
         pkgbuild=args.pkgbuild, rebuild=args.rebuild, unpack=args.unpack,
-        python=args.python, pythonpath=args.pythonpath, extra_cmake_args=unknown_args)
+        python=args.python, pythonpath=args.pythonpath, extra_cmake_args=unknown_args, build=args.build)

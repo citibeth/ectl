@@ -72,7 +72,7 @@ def read_cmake_cache(fname):
 
     return vars
 
-def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True, python='python3', pythonpath=None, extra_cmake_args=[]):
+def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None, unpack=True, python='python3', pythonpath=None, extra_cmake_args=[], build=True):
 
     # Move parameters to different name to maintain SSA coding style below.
     args_run = run
@@ -109,7 +109,14 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
     print('    status:  %d' % status.status)
 
     # ----- Determine the rundeck
-    new_rundeck = os.path.abspath(args_rundeck) if args_rundeck is not None else None
+    if args_rundeck is None:
+        new_rundeck = None
+    elif os.path.isfile(args_rundeck) or args_src is None:
+        new_rundeck = os.path.abspath(args_rundeck)
+    else:
+        # No valid path for rundeck; the user meant out of the templates dir
+        new_rundeck = os.path.join(args_src, 'templates', args_rundeck)
+
     print('args_rundeck', args_rundeck)
     print('new_rundeck', new_rundeck)
 
@@ -249,6 +256,30 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
     set_link(pkg, os.path.join(args_run, 'pkg'))
 
 
+    # ------------------ Download input files
+    download_dir = os.environ['MODELE_ORIGIN_DIR']
+    good = ectl.cdlparams.resolve_cdls_in_dir(os.path.join(args_run, 'config'), download_dir=download_dir)
+
+    rd.params.files.resolve(
+        file_path=ectl.paths.default_file,
+        download_dir=download_dir)
+
+    if not good:
+        raise Exception('Problem resolving one or more input filesnames')
+
+
+    # ---- Create data file symlinks and I file
+    # (Just so the user can see what it will be; this is
+    # re-done in launch.py)
+    rundir.make_rundir(rd, args_run)
+
+    # Initial calls to `ectl setup` should not build; because the user
+    # will likely need to edit `rundeck.R`
+    if not build:
+        return
+
+    # ================ Part 2: The Build
+
     # ------ Re-build only if our pkg is not good
     if args_rebuild or pkgbuild or (not good_pkg_dir(pkg)) or (old.pkg is None):
 
@@ -326,22 +357,6 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
                             except OSError:
                                 pass
 
-
-    # ------------------ Download input files
-    download_dir = os.environ['MODELE_ORIGIN_DIR']
-    good = ectl.cdlparams.resolve_cdls_in_dir(os.path.join(args_run, 'config'), download_dir=download_dir)
-
-    rd.params.files.resolve(
-        file_path=ectl.paths.default_file,
-        download_dir=download_dir)
-
-    if not good:
-        raise Exception('Problem resolving one or more input filesnames')
-
-    # ---- Create data file symlinks and I file
-    # (Just so the user can see what it will be; this is
-    # re-done in launch.py)
-    rundir.make_rundir(rd, args_run)
 
     # ---- Run setup scripts...
     for fname in os.listdir(os.path.join(args_run, 'config')):

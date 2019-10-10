@@ -106,6 +106,8 @@ def make_rundir(rd, rundir, idir=None):
     # -------- Link data files
     for label, param in rd.params.files.items():
         fname = param.rval
+        if fname is None:
+            raise ValueError('param with null rval: {} {}'.format(type(param), param))
         os.symlink(fname, os.path.join(rundir, label))
 
     # Write them out to the I file

@@ -18,6 +18,7 @@ import math
 import traceback
 import subprocess
 import ectl.config
+from giss import ioutil
 
 def setup_parser(subparser):
     subparser.add_argument('run', nargs='?', default='.',
@@ -320,8 +321,9 @@ def launch(run, launcher=None, force=False, ntasks=None, time=None, rundeck_modi
             config_dir = os.path.join(paths.run, 'config')
             rd = rundeck.load(os.path.join(config_dir, 'rundeck.R'), modele_root=paths.src)
             download_dir=ectl.paths.default_file[0]
-            rd.params.files.resolve(file_path=ectl.paths.default_file,
-                download_dir=download_dir)
+            with ioutil.pushd(paths.run):
+                rd.params.files.resolve(file_path=ectl.paths.default_file,
+                    download_dir=download_dir)
 
             # Copy stuff from INPUTZ_cold to INPUTZ if this is a cold start.
             # This eliminates the need for the '-cold-restart' flag to modelexe

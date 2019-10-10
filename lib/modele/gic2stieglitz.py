@@ -15,6 +15,8 @@ def gic2stieglitz(igic, ogic):
     ogic:
         Output GIC file, Stieglitz"""
 
+    nlice=5
+
     # -------------------------------------------------------------
     # 5) Convert snowli/tlandi to Stieglitz state variables
 
@@ -101,8 +103,7 @@ def gic2stieglitz(igic, ogic):
             install_path = ncout.createVariable('install_paths', 'i')
             files.source = os.path.abspath(igic)
 
-            ncc = copy_nc(ncin, ncout,
-                var_filter = lambda x : None if x in {'snowli', 'tlandi'} else x)
+            ncc = copy_nc(ncin, ncout)
 
             ncc.createDimension('nhc', nhc)
             ncc.createDimension('nlice', nlice)
@@ -132,8 +133,9 @@ def gic2stieglitz(igic, ogic):
             var.units = 'degC'
             var.description = 'Temperature of layer.  Diagnostic only, for debugging the this input file.'
 
+            ncc.define_vars(
+                [x for x in ncin.variables.keys() if x not in {'snowli', 'tlandi'}])
 
-            ncc.define_all_vars()
             ncc.copy_data()
 
     #print(sum(sum(np.logical_and(snowli[0,:,:] == 0, fgice > 0))))

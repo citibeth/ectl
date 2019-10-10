@@ -4,6 +4,8 @@ import re
 import sys
 import urllib.request
 import subprocess
+import shutil
+from giss import ioutil
 
 # http://code.activestate.com/recipes/52224-find-a-file-given-a-search-path/
 def search_file(filename, search_path):
@@ -37,7 +39,7 @@ def download_file(sval, download_dir, label=''):
             u = urllib.request.urlopen(url)
             meta = u.info()
             file_size = int(meta['Content-Length'])
-            print('{}: Downloading [{} bytes] {}'.format(label, file_size, sval))
+            print('{}: Downloading1 [{} bytes] {}'.format(label, file_size, sval))
 
             file_size_dl = 0
             block_sz = 8192
@@ -77,13 +79,44 @@ def download_file_curl(sval, download_dir, label=''):
     except:
         pass
 
-    print('{}: Downloading {}'.format(label, sval))
-    cmd = ['curl', '--output', file_name, url]
+    print('{}: Downloading2 {}'.format(label, sval))
+    cmd = ['curl', '--fail', '--output', file_name, url]
     subprocess.check_call(cmd)
-    print('---------------------------------------------')
+    return file_name
+
+def download_dir_wget(sval, download_dir, label=''):
+
+    file_name = os.path.join(download_dir, sval)
+    url = 'https://portal.nccs.nasa.gov/GISS_modelE/modelE_input_data/{}/'.format(sval)
+
+    print('{}: Downloading3 {}'.format(label, sval))
+    tmpdir_name = os.path.join(download_dir, sval + '_tmp')
+    shutil.rmtree(tmpdir_name, ignore_errors=True)
+    os.makedirs(tmpdir_name)
+    with ioutil.pushd(tmpdir_name):
+        cmd = ['wget', '--no-parent', '-r', url]
+        subprocess.check_call(cmd)
+
+    # Now copy (move) the downloaded files out of temporary location
+    src_dir = os.path.join(tmpdir_name, 'portal.nccs.nasa.gov', 'GISS_modelE', 'modelE_input_data', sval)
+    dest_dir = os.path.join(download_dir, sval)
+    os.rename(src_dir, dest_dir)
+    shutil.rmtree(tmpdir_name, ignore_errors=True)
+    return dest_dir
+
+def download_file_or_dir(sval, download_dir, label=''):
+    fname = download_file_curl(sval, download_dir, label=label)
+    
+    with open(fname, 'r') as fin:
+        head = fin.read(400)
+    if '301 Moved Permanently' in head:
+        os.remove(fname)
+        fname = download_dir_wget(sval, download_dir, label=label)
+    return fname
 
 
 def search_or_download_file(param_name, file_name, search_path, download_dir=None):
+    download_dir = os.path.abspath(download_dir)
 
     try:
         return search_file(file_name, search_path)
@@ -95,7 +128,9 @@ def search_or_download_file(param_name, file_name, search_path, download_dir=Non
         else:
             # Could not resolve path; download it
             try:
-                return download_file_curl(file_name, download_dir, label=param_name)
+                #return download_file_curl(file_name, download_dir, label=param_name)
+                # Some ModelE symlinks are entire directories of stuff
+                return download_file_or_dir(file_name, download_dir, label=param_name)
             except KeyboardInterrupt as e2:
                 print(e2)
                 raise

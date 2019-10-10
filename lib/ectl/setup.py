@@ -257,21 +257,25 @@ def setup(run, rundeck=None, src=None, pkgbuild=False, rebuild=False, jobs=None,
 
 
     # ------------------ Download input files
-    download_dir = os.environ['MODELE_ORIGIN_DIR']
-    good = ectl.cdlparams.resolve_cdls_in_dir(os.path.join(args_run, 'config'), download_dir=download_dir)
+    with ioutil.pushd(args_run):
+        download_dir = os.environ['MODELE_ORIGIN_DIR']
+        good = ectl.cdlparams.resolve_cdls_in_dir(os.path.join(args_run, 'config'), download_dir=download_dir)
 
-    rd.params.files.resolve(
-        file_path=ectl.paths.default_file,
-        download_dir=download_dir)
+        rd.params.files.resolve(
+            file_path=ectl.paths.default_file,
+            download_dir=download_dir)
 
-    if not good:
-        raise Exception('Problem resolving one or more input filesnames')
+        if not good:
+            raise Exception('Problem resolving one or more input filesnames')
 
 
-    # ---- Create data file symlinks and I file
+    # ---------- Create rundir (including input files, now downloaded)
     # (Just so the user can see what it will be; this is
     # re-done in launch.py)
+    print('xxxxxxxxxxxxxxxxxx rundir ',args_run)
     rundir.make_rundir(rd, args_run)
+
+    # ---- Create data file symlinks and I file
 
     # Initial calls to `ectl setup` should not build; because the user
     # will likely need to edit `rundeck.R`

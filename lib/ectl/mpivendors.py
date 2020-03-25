@@ -2,6 +2,7 @@ import re
 import os
 import subprocess
 import math
+import sys
 import spack.util.executable
 from giss import ioutil
 
@@ -124,7 +125,7 @@ class IntelMPI(MPIVendor):
 # ------------------------------------------------------------
 mpiRE = re.compile(
     r'(mpirun \(Open MPI\) (\d+)\.(\d+)\.(\d+).*)|'+ \
-    r'(Intel\(R\) MPI Library for Linux\* OS, Version (\d+) Update (\d+) Build (\d+) \(id: (\d+)\).*)',
+    r'(Intel\(R\) MPI Library for Linux\* OS, Version (\d+) Update (\d+) Build (\d+) \(id: ([0-9,a-f]+)\).*)',
     re.MULTILINE)
 
 def construct_mpi_vendor(vendor, version):
@@ -161,7 +162,7 @@ def mpi_vendor():
         version = (int(match.group(2)), int(match.group(3)), int(match.group(4)))
     elif match.group(5) is not None:
         vendor = 'impi'
-        version = (int(match.group(6)), int(match.group(7)), int(match.group(8)), int(match.group(9)))
+        version = (int(match.group(6)), int(match.group(7)), int(match.group(8)))
     else:
         raise RuntimeError("Cannot construct MPIVendor, don't know why")
     return construct_mpi_vendor(vendor,version)

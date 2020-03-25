@@ -165,6 +165,7 @@ class SlurmLauncher(object):
                 '#',
                 '',
                 'ulimit -s unlimited',   # Needed on discover; see note below on NCCS ISSUE=68758
+                'ulimit -c 0',    # Turn off core dumps
                 cmd_str])
             (sout, serr) = proc.communicate(batch_script.encode())
             if len(serr) > 0:
